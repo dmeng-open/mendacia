@@ -76,7 +76,7 @@ def test_record_then_replay_complete(
 ) -> None:
     monkeypatch.setattr(llm_replay, "FIXTURES_DIR", tmp_path)
     monkeypatch.setattr("app.llm.litellm.completion", fake_completion("pong"))
-    monkeypatch.setattr("app.llm.litellm.completion_cost", lambda _: 0.25)
+    monkeypatch.setattr("app.llm.litellm.completion_cost", lambda _: 0.0)
     monkeypatch.setenv("LLM_MODE", "record")
     messages = [{"role": "user", "content": uuid4().hex}]
     recorded_purpose = uuid4().hex
@@ -88,7 +88,7 @@ def test_record_then_replay_complete(
     second = complete(ModelRole.FAST, messages, purpose=replay_purpose)
 
     assert first.text == second.text == "pong"
-    assert (second.prompt_tokens, second.completion_tokens, second.cost_usd) == (7, 3, 0.25)
+    assert (second.prompt_tokens, second.completion_tokens, second.cost_usd) == (7, 3, 0.0)
     assert [r.mode for r in rows(recorded_purpose)] == ["record"]
     assert [r.mode for r in rows(replay_purpose)] == ["replay"]
 
@@ -103,7 +103,7 @@ def test_record_then_replay_embed(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
         )
 
     monkeypatch.setattr("app.llm.litellm.embedding", fake_embedding)
-    monkeypatch.setattr("app.llm.litellm.completion_cost", lambda _: 0.001)
+    monkeypatch.setattr("app.llm.litellm.completion_cost", lambda _: 0.0)
     monkeypatch.setenv("LLM_MODE", "record")
     texts = [uuid4().hex]
     first = embed(texts, purpose=uuid4().hex)
