@@ -28,6 +28,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: make setup
       - run: make migrate
+      - run: make doctor SKIP_MODEL=1
       - run: make ci
 
   compose-smoke:
