@@ -66,8 +66,7 @@ MODELS: dict[ModelRole, Callable[[Settings], str]] = {
     ModelRole.EMBED: lambda s: s.embed_model,
 }
 
-# Providers missing here fall back to LiteLLM reading its own env vars.
-PROVIDER_KEYS: dict[str, tuple[str, Callable[[Settings], Any]]] = {
+EXPLICIT_KEY_PROVIDERS: dict[str, tuple[str, Callable[[Settings], Any]]] = {
     "anthropic": ("MENDACIA_ANTHROPIC_API_KEY", lambda s: s.anthropic_api_key),
 }
 
@@ -77,11 +76,11 @@ def _engine(database_url: str) -> sa.Engine:
     return sa.create_engine(database_url, pool_pre_ping=True)
 
 
-def _api_key_kwargs(settings: Settings, model: str) -> dict[str, Any]:
+def _explicit_key_kwargs(settings: Settings, model: str) -> dict[str, Any]:
     _, provider, _, _ = litellm.get_llm_provider(model)
-    if provider not in PROVIDER_KEYS:
+    if provider not in EXPLICIT_KEY_PROVIDERS:
         return {}
-    env_name, read = PROVIDER_KEYS[provider]
+    env_name, read = EXPLICIT_KEY_PROVIDERS[provider]
     secret = read(settings)
     if secret is None:
         raise MissingApiKey(f"{env_name} is not set")
@@ -103,7 +102,7 @@ def _run(
         recording = llm_replay.load(key)
     else:
         model = MODELS[role](settings)
-        kwargs = _api_key_kwargs(settings, model)
+        kwargs = _explicit_key_kwargs(settings, model)
         started = time.monotonic()
         response, cost = live_call(model, kwargs)
         latency_ms = round((time.monotonic() - started) * 1000)
