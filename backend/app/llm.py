@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-import litellm
 import sqlalchemy as sa
 from pydantic import BaseModel
 
@@ -72,6 +71,8 @@ EXPLICIT_KEY_PROVIDERS: dict[str, tuple[str, Callable[[Settings], Any]]] = {
 
 
 def _explicit_key_kwargs(settings: Settings, model: str) -> dict[str, Any]:
+    import litellm
+
     _, provider, _, _ = litellm.get_llm_provider(model)
     if provider not in EXPLICIT_KEY_PROVIDERS:
         return {}
@@ -148,6 +149,8 @@ def complete(
     }
 
     def live_call(model: str, kwargs: dict[str, Any]) -> tuple[Any, float]:
+        import litellm
+
         response = litellm.completion(
             model=model,
             messages=messages,
@@ -176,6 +179,8 @@ def embed(texts: list[str], *, purpose: str) -> Embedding:
     request = {"input": texts}
 
     def live_call(model: str, kwargs: dict[str, Any]) -> tuple[Any, float]:
+        import litellm
+
         response = litellm.embedding(model=model, input=texts, **kwargs)
         return response, litellm.completion_cost(response)
 
