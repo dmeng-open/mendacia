@@ -1,0 +1,190 @@
+{
+  "id": "gallery",
+  "title": "The Vermilion Gallery",
+  "summary": "Curator Ines Marlow was found dead in the gallery vault at 7pm on opening night, beside a bronze statuette from the new collection. The doors were locked at six, and four people were still inside.",
+  "victim": {
+    "id": "ines_marlow",
+    "name": "Ines Marlow",
+    "description": "The gallery's curator, who had just discovered that a painting in the vault was a forgery."
+  },
+  "suspects": [
+    {
+      "id": "theo_vance",
+      "name": "Theo Vance",
+      "description": "The artist whose work opened the season, and whose last show the curator panned."
+    },
+    {
+      "id": "sam_okafor",
+      "name": "Sam Okafor",
+      "description": "The night guard, who holds the only keycard for the vault."
+    },
+    {
+      "id": "lady_wren",
+      "name": "Lady Wren",
+      "description": "A collector who sold the gallery its most expensive painting."
+    },
+    {
+      "id": "pia_lund",
+      "name": "Pia Lund",
+      "description": "The curator's assistant, who keeps the catalogue and the schedule."
+    }
+  ],
+  "locations": {
+    "vault": "the vault",
+    "east_hall": "the east hall",
+    "west_hall": "the west hall",
+    "cafe": "the cafe",
+    "office": "the curator's office"
+  },
+  "items": {
+    "bronze_statuette": "the bronze statuette",
+    "vault_keycard": "the vault keycard"
+  },
+  "time_slots": ["6pm", "7pm", "8pm"],
+  "crime": {
+    "location": "vault",
+    "time_slot": 2,
+    "means": "bronze_statuette"
+  },
+  "facts": [
+    {
+      "id": "sam_in_vault",
+      "subject": "sam_okafor",
+      "predicate": "at",
+      "object": "vault",
+      "time_slot": 2,
+      "known_by": ["sam_okafor"]
+    },
+    {
+      "id": "sam_has_statuette",
+      "subject": "sam_okafor",
+      "predicate": "has",
+      "object": "bronze_statuette",
+      "known_by": ["sam_okafor", "pia_lund"]
+    },
+    {
+      "id": "theo_in_cafe",
+      "subject": "theo_vance",
+      "predicate": "at",
+      "object": "cafe",
+      "time_slot": 2,
+      "known_by": ["theo_vance", "pia_lund"]
+    },
+    {
+      "id": "pia_saw_theo",
+      "subject": "pia_lund",
+      "predicate": "saw",
+      "object": "theo_vance",
+      "time_slot": 2,
+      "known_by": ["pia_lund", "theo_vance"]
+    },
+    {
+      "id": "wren_in_east_hall",
+      "subject": "lady_wren",
+      "predicate": "at",
+      "object": "east_hall",
+      "time_slot": 2,
+      "known_by": ["lady_wren", "sam_okafor"]
+    },
+    {
+      "id": "wren_owes_marlow",
+      "subject": "lady_wren",
+      "predicate": "owes",
+      "object": "ines_marlow",
+      "known_by": ["lady_wren"]
+    }
+  ],
+  "secrets": {
+    "sam_okafor": ["sam_in_vault", "sam_has_statuette"],
+    "lady_wren": ["wren_in_east_hall", "wren_owes_marlow"]
+  },
+  "planned_lies": [
+    {
+      "id": "sam_west_hall_lie",
+      "suspect": "sam_okafor",
+      "hides_fact": "sam_in_vault",
+      "claim": {
+        "subject": "sam_okafor",
+        "predicate": "at",
+        "object": "west_hall",
+        "time_slot": 2
+      },
+      "says": "At seven I was walking my round in the west hall. I never opened the vault."
+    },
+    {
+      "id": "wren_office_lie",
+      "suspect": "lady_wren",
+      "hides_fact": "wren_in_east_hall",
+      "claim": {
+        "subject": "lady_wren",
+        "predicate": "at",
+        "object": "office",
+        "time_slot": 2
+      },
+      "says": "I was waiting in the curator's office for Ines. She never came."
+    }
+  ],
+  "clues": [
+    {
+      "id": "theo_cafe_testimony",
+      "kind": "testimony",
+      "description": "Theo Vance was in the cafe at 7pm, arguing about the hanging of his canvases.",
+      "reveals": ["theo_in_cafe"]
+    },
+    {
+      "id": "pia_saw_theo_testimony",
+      "kind": "testimony",
+      "description": "At 7pm Pia Lund saw Theo Vance and brought him a coffee.",
+      "reveals": ["pia_saw_theo"]
+    },
+    {
+      "id": "cctv_east_hall",
+      "kind": "evidence",
+      "description": "The east hall camera shows Lady Wren in front of her painting at 7pm.",
+      "reveals": ["wren_in_east_hall"],
+      "doc_id": "cctv_log"
+    },
+    {
+      "id": "keycard_log",
+      "kind": "evidence",
+      "description": "The vault door log shows the guard's keycard used at 7:04pm.",
+      "reveals": ["sam_in_vault"],
+      "doc_id": "vault_door_log"
+    },
+    {
+      "id": "statuette_testimony",
+      "kind": "testimony",
+      "description": "Pia Lund saw Sam Okafor carry the bronze statuette out of the packing room.",
+      "reveals": ["sam_has_statuette"]
+    },
+    {
+      "id": "sale_receipt",
+      "kind": "evidence",
+      "description": "A refund demand from the curator to Lady Wren for the forged painting.",
+      "reveals": ["wren_owes_marlow"],
+      "doc_id": "refund_demand"
+    }
+  ],
+  "documents": [
+    {
+      "id": "cctv_log",
+      "title": "East hall camera log",
+      "body": "Camera E2. 18:58 visitor enters. 19:00 to 19:12 visitor (female, grey coat, identified as Lady Wren) stands at catalogue no. 14. 19:13 visitor exits north.",
+      "is_key": true
+    },
+    {
+      "id": "vault_door_log",
+      "title": "Vault door access log",
+      "body": "18:02 card 19 (S. Okafor) lock. 19:04 card 19 (S. Okafor) unlock. 19:09 card 19 (S. Okafor) lock.",
+      "is_key": false
+    },
+    {
+      "id": "refund_demand",
+      "title": "Letter from the curator to Lady Wren",
+      "body": "Lady Wren, catalogue no. 14 is not what you sold us. The gallery requires the full price returned by Friday, or I go to the police.",
+      "is_key": false
+    }
+  ],
+  "solution_chain": ["theo_cafe_testimony", "pia_saw_theo_testimony", "cctv_east_hall"],
+  "culprit": "sam_okafor"
+}
