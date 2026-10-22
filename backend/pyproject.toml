@@ -9,6 +9,7 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "alembic>=1.14",
     "pydantic-settings>=2.6",
+    "litellm>=1.60",
 ]
 
 [dependency-groups]
