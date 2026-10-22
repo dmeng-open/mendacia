@@ -73,13 +73,23 @@ def render_report(report: CheckReport, expected: str) -> list[str]:
             lines.append(f"uniqueness PASS culprit={culprit}")
         case Ambiguous(culprits, cx):
             lines += [f"uniqueness FAIL culprits={','.join(culprits)}", _counterexample(cx)]
-        case WrongCulprit(cx):
+        case WrongCulprit(culprits, cx):
             lines += [
-                f"uniqueness FAIL culprit={cx.culprit} expected={expected}",
+                f"uniqueness FAIL culprits={','.join(culprits)} expected={expected}",
                 _counterexample(cx),
             ]
         case NoCulprit():
             lines.append("uniqueness FAIL no culprit: the clues rule out every suspect")
+    match report.sufficiency:
+        case Unique(culprit):
+            lines.append(f"sufficiency PASS chain alone proves culprit={culprit}")
+        case Ambiguous(culprits, cx) | WrongCulprit(culprits, cx):
+            lines += [
+                f"sufficiency FAIL chain alone allows {','.join(culprits)}",
+                _counterexample(cx),
+            ]
+        case NoCulprit():
+            lines.append("sufficiency FAIL no culprit")
     match report.necessity:
         case NecessitySkipped():
             lines.append("necessity SKIP uniqueness failed")
@@ -94,13 +104,17 @@ def render_report(report: CheckReport, expected: str) -> list[str]:
                     case DropLeavesNoModel(clue_id):
                         lines.append(f"  {clue_id}: dropping it leaves no model")
     exposed = sum(lie.exposed for lie in report.lies)
-    warn = any(not lie.exposed or lie.true_in_case for lie in report.lies)
+    warn = any(
+        not lie.exposed or lie.true_in_case or not lie.denies_hidden_fact for lie in report.lies
+    )
     lines.append(f"lies {'WARN' if warn else 'PASS'} {exposed}/{len(report.lies)} exposed")
     for lie in report.lies:
         if not lie.exposed:
             lines.append(f"  {lie.lie_id}: no clue exposes it")
         if lie.true_in_case:
             lines.append(f"  {lie.lie_id}: the case facts allow the claim to be true")
+        if not lie.denies_hidden_fact:
+            lines.append(f"  {lie.lie_id}: the claim does not contradict the fact it hides")
     return lines
 
 

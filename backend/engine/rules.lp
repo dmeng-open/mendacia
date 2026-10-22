@@ -37,9 +37,11 @@ revealed(F) :- reveals(_, F).
 revealed(F) :- pinned(F).
 :- revealed(F), not holds(F).
 
-{ culprit(S) : suspect(S) } = 1.
+% The solver turns scene off to ask what the clues alone rule out, without the crime.
+#external scene. [true]
+{ culprit(S) : suspect(S) } = 1 :- scene.
 :- culprit(S), crime(L, T, _), not at(S, L, T).
 :- culprit(S), crime(_, _, I), not has(S, I).
-:- victim(V), crime(L, T, _), not at(V, L, T).
+:- scene, victim(V), crime(L, T, _), not at(V, L, T).
 
 #show culprit/1.

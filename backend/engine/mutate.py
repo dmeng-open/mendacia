@@ -15,7 +15,9 @@ def drop_clue(case: Case, clue_id: str) -> Case:
 
 
 def add_contradiction(case: Case, fact_id: str) -> Case:
-    fact = next(f for f in case.facts if f.id == fact_id)
+    fact = next((f for f in case.facts if f.id == fact_id), None)
+    if fact is None:
+        raise KeyError(fact_id)
     if fact.predicate == "at":
         person, here = fact.subject, fact.object
     elif fact.predicate == "saw":

@@ -18,18 +18,25 @@ All rules live in `backend/engine/rules.lp`. `compile_case` appends the case as 
 - `has`, `saw`, `heard`, and `owes` are free choices. `saw(A, B, T)` forces B into A's location at T. `heard` and `owes` constrain nothing yet.
 - `has` is not exclusive. With an exclusive `has`, the clue that gives the culprit the means names the culprit on its own, and every `solution_chain` clue becomes redundant.
 - `holds(F)` is true when fact F's statement is true in the model. A clue pins its facts with `:- revealed(F), not holds(F).` A fact no clue reveals stays a free choice.
-- The culprit is at the crime location in the crime slot and has the means. The victim is at the crime location in the crime slot.
+- The culprit is at the crime location in the crime slot and has the means. The victim is at the crime location in the crime slot. These rules hold only while the external atom `scene` is true, which is its default. The solver turns `scene` off to ask what the clues rule out without the crime.
 
-**Lies enter as testimony.** A planned lie compiles to `claim/6`, which derives `claim_holds/1` and nothing else, so a lie never changes the set of culprits. The solver reports two warnings per lie, and neither fails a check. `exposed` is false when some world that fits every clue makes the claim true, so no evidence can catch the lie. Exposure counts reasoning, not only a clue that reveals the hidden fact. `true_in_case` is true when the case's own facts allow the claim, so the "lie" may not be false at all.
+**Lies enter as testimony.** A planned lie compiles to `claim/6`, which derives `claim_holds/1` and nothing else, so a lie never changes the set of culprits. The solver reports three warnings per lie with `scene` off, and none fails a check.
+
+- `exposed` is false when some world that fits every clue makes the claim true, so no evidence can catch the lie. Exposure counts reasoning, not only a clue that reveals the hidden fact. With `scene` on, the culprit's own alibi lie would always look exposed, because uniqueness already forces the culprit to the scene.
+- `true_in_case` is true when the case's own facts allow the claim, so the "lie" may not be false at all.
+- `denies_hidden_fact` is false when the claim and its `hides_fact` can both hold, so the lie does not hide what it says it hides.
 
 **Checks.**
 
 - Consistency drops every clue, assumes `holds(F)` for every case fact and `culprit(<case.culprit>)`, and solves. On unsat it shrinks the assumptions to a subset-minimal core by deletion. Facts that share a (person, slot) with another fact are deleted last, so a two-places clash reports its two fact ids instead of a longer chain that rules out every suspect.
 - Uniqueness solves the full program with `0 --project` and `#show culprit/1.`, which enumerates distinct culprits. The result is `Unique`, `Ambiguous`, `WrongCulprit`, or `NoCulprit`. Zero models is its own reason.
+- Sufficiency reruns uniqueness with only the `solution_chain` clues, so the chain alone proves the culprit. Hints and accusations in Phase 2 lean on the chain.
 - Necessity reruns uniqueness once per chain clue with that clue dropped. A clue is `Necessary` when another suspect becomes possible, `Redundant` when the culprit stays unique, and `DropLeavesNoModel` when no model remains. Dropping a clue only removes constraints, so a case with any model never reaches `DropLeavesNoModel`. The type keeps that reason distinct anyway. Necessity is `NecessitySkipped` when uniqueness fails.
 - Each alternative culprit gets a `Counterexample` from a second solve with `:- not culprit(X).` and a `#minimize` over case facts that do not hold. `breaks` lists the case facts that world must deny, and `holds` lists the rest. On every chain drop in the three hand-written cases, `breaks` is exactly the dropped clue's fact, which tells the repair loop what to reveal.
 
 `check_case` returns these as closed union types, and `CheckReport.passed` is derived from them. `drop_clue` removes a clue from `clues` and `solution_chain`. `add_contradiction` adds an `at` fact that places the same person somewhere else in the same slot, for `at` and `saw` facts. Other predicates raise `Uncontradictable`, because the schema has no negative statements.
+
+**What the proof rests on.** Guilt is proven by elimination. A suspect is ruled out only by an `at` or `saw` pin that puts them somewhere else in the crime slot. `has` is not exclusive and nothing states a negative, so a `has`, `heard`, or `owes` clue can never rule anyone out, and such a clue in `solution_chain` always reports `Redundant`. The culprit's own clues, such as the diary page that places Clara in the study, make the story but are not part of the proof. A rule that the clues must also implicate the culprit positively would be a new check, not a change to this encoding.
 
 ## Rejected
 
@@ -41,4 +48,4 @@ All rules live in `backend/engine/rules.lp`. `compile_case` appends the case as 
 
 ## Consequences
 
-`make check-case CASE=<path>` prints one line per check, the counterexample when one exists, and the lie warnings, and exits 1 when the case fails. `backend/pyproject.toml` gains `clingo`, the one file outside the Phase 1 boundary this PR edits.
+`make check-case CASE=<path>` prints one line per check (consistency, uniqueness, sufficiency, necessity, lies), the counterexample when one exists, and the lie warnings, and exits 1 when the case fails. `backend/pyproject.toml` gains `clingo`, the one file outside the Phase 1 boundary this PR edits.

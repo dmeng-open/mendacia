@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import clingo
 
 from engine.compiler import compile_case
-from engine.schema import Case, Fact
+from engine.schema import Case, Fact, PlannedLie
 
 
 @dataclass(frozen=True)
@@ -41,6 +41,7 @@ class Ambiguous:
 
 @dataclass(frozen=True)
 class WrongCulprit:
+    culprits: tuple[str, ...]
     counterexample: Counterexample
 
 
@@ -84,6 +85,7 @@ class LieCheck:
     lie_id: str
     exposed: bool
     true_in_case: bool
+    denies_hidden_fact: bool
 
 
 @dataclass(frozen=True)
@@ -91,6 +93,7 @@ class CheckReport:
     case_id: str
     consistency: Consistency
     uniqueness: Uniqueness
+    sufficiency: Uniqueness
     necessity: Necessity
     lies: tuple[LieCheck, ...]
 
@@ -99,6 +102,7 @@ class CheckReport:
         return (
             isinstance(self.consistency, Consistent)
             and isinstance(self.uniqueness, Unique)
+            and isinstance(self.sufficiency, Unique)
             and not isinstance(self.necessity, NecessitySkipped)
             and all(isinstance(v, Necessary) for v in self.necessity)
         )
@@ -106,24 +110,29 @@ class CheckReport:
 
 def check_case(case: Case) -> CheckReport:
     full = compile_case(case)
-    no_clues = compile_case(case, drop_clues=frozenset(c.id for c in case.clues))
+    every_clue = frozenset(c.id for c in case.clues)
+    no_clues = compile_case(case, drop_clues=every_clue)
+    chain_only = compile_case(case, drop_clues=every_clue - set(case.solution_chain))
     uniqueness = _uniqueness(case, full)
     return CheckReport(
         case_id=case.id,
         consistency=_consistency(case, no_clues),
         uniqueness=uniqueness,
+        sufficiency=_uniqueness(case, chain_only),
         necessity=_necessity(case) if isinstance(uniqueness, Unique) else NecessitySkipped(),
-        lies=tuple(_lie_check(case, lie.id, full, no_clues) for lie in case.planned_lies),
+        lies=tuple(_lie_check(case, lie, full, no_clues) for lie in case.planned_lies),
     )
 
 
 def _consistency(case: Case, no_clues: str) -> Consistency:
-    tagged = {f.id: _atom("holds", f.id) for f in case.facts}
-    tagged["culprit"] = _atom("culprit", case.culprit)
-    core = _minimal_conflict(no_clues, tagged, delete_last=_colliding(case.facts))
+    culprit = ("culprit", case.culprit)
+    tagged = {("fact", f.id): _atom("holds", f.id) for f in case.facts}
+    tagged[culprit] = _atom("culprit", case.culprit)
+    colliding = {("fact", fact_id) for fact_id in _colliding(case.facts)}
+    core = _minimal_conflict(no_clues, tagged, delete_last=frozenset(colliding))
     if core is None:
         return Consistent()
-    return Conflict(tuple(t for t in core if t != "culprit"), "culprit" in core)
+    return Conflict(tuple(i for kind, i in core if kind == "fact"), culprit in core)
 
 
 def _uniqueness(case: Case, program: str) -> Uniqueness:
@@ -135,31 +144,33 @@ def _uniqueness(case: Case, program: str) -> Uniqueness:
     other = next(c for c in culprits if c != case.culprit)
     witness = _witness(program, other)
     if case.culprit not in culprits:
-        return WrongCulprit(witness)
+        return WrongCulprit(culprits, witness)
     return Ambiguous(culprits, witness)
 
 
 def _necessity(case: Case) -> tuple[ClueVerdict, ...]:
     verdicts: list[ClueVerdict] = []
     for clue_id in case.solution_chain:
-        program = compile_case(case, drop_clues=frozenset({clue_id}))
-        culprits = _culprits(program)
-        if not culprits:
-            verdicts.append(DropLeavesNoModel(clue_id))
-        elif culprits == (case.culprit,):
-            verdicts.append(Redundant(clue_id))
-        else:
-            other = next(c for c in culprits if c != case.culprit)
-            verdicts.append(Necessary(clue_id, _witness(program, other)))
+        match _uniqueness(case, compile_case(case, drop_clues=frozenset({clue_id}))):
+            case Unique():
+                verdicts.append(Redundant(clue_id))
+            case NoCulprit():
+                verdicts.append(DropLeavesNoModel(clue_id))
+            case Ambiguous(_, cx) | WrongCulprit(_, cx):
+                verdicts.append(Necessary(clue_id, cx))
     return tuple(verdicts)
 
 
-def _lie_check(case: Case, lie_id: str, full: str, no_clues: str) -> LieCheck:
-    claim = _atom("claim_holds", lie_id)
+def _lie_check(case: Case, lie: PlannedLie, full: str, no_clues: str) -> LieCheck:
+    claim = _atom("claim_holds", lie.id)
+    every_fact = [_atom("holds", f.id) for f in case.facts]
     return LieCheck(
-        lie_id=lie_id,
-        exposed=not _possible(full, [claim]),
-        true_in_case=_possible(no_clues, [claim, *(_atom("holds", f.id) for f in case.facts)]),
+        lie_id=lie.id,
+        exposed=not _possible(full, [claim], scene=False),
+        true_in_case=_possible(no_clues, [claim, *every_fact], scene=False),
+        denies_hidden_fact=not _possible(
+            no_clues, [claim, _atom("holds", lie.hides_fact)], scene=False
+        ),
     )
 
 
@@ -174,8 +185,9 @@ def _ground(program: str, *args: str) -> clingo.Control:
     return control
 
 
-def _possible(program: str, atoms: Sequence[clingo.Symbol]) -> bool:
+def _possible(program: str, atoms: Sequence[clingo.Symbol], *, scene: bool) -> bool:
     control = _ground(program)
+    control.assign_external(clingo.Function("scene"), scene)
     return bool(control.solve(assumptions=[(a, True) for a in atoms]).satisfiable)
 
 
@@ -210,14 +222,15 @@ def _witness(program: str, culprit: str) -> Counterexample:
     )
 
 
+Tag = tuple[str, str]
+
+
 def _minimal_conflict(
-    program: str,
-    tagged: dict[str, clingo.Symbol],
-    delete_last: frozenset[str] = frozenset(),
-) -> tuple[str, ...] | None:
+    program: str, tagged: dict[Tag, clingo.Symbol], delete_last: frozenset[Tag]
+) -> tuple[Tag, ...] | None:
     control = _ground(program)
 
-    def unsat(tags: Sequence[str]) -> bool:
+    def unsat(tags: Sequence[Tag]) -> bool:
         return bool(control.solve(assumptions=[(tagged[t], True) for t in tags]).unsatisfiable)
 
     core = sorted(tagged, key=lambda t: (t in delete_last, t))

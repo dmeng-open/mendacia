@@ -24,6 +24,9 @@ def compile_case(
     unknown = drop_clues - {c.id for c in case.clues}
     if unknown:
         raise KeyError(f"unknown clues to drop: {sorted(unknown)}")
+    taken = {f.id for f in case.facts} & {f.id for f in extra}
+    if taken:
+        raise ValueError(f"extra facts reuse case fact ids: {sorted(taken)}")
     lines = [RULES]
     lines += [f"suspect({s.id})." for s in case.suspects]
     lines.append(f"victim({case.victim.id}).")

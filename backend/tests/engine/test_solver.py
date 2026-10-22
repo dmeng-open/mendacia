@@ -16,6 +16,7 @@ from engine.solver import (
     NoCulprit,
     Redundant,
     Unique,
+    WrongCulprit,
     check_case,
 )
 
@@ -41,9 +42,12 @@ def test_hand_written_case_passes_every_check(path: Path) -> None:
 
     assert report.consistency == Consistent()
     assert report.uniqueness == Unique(case.culprit)
+    assert report.sufficiency == Unique(case.culprit)
     assert not isinstance(report.necessity, NecessitySkipped)
     assert [type(v) for v in report.necessity] == [Necessary] * len(case.solution_chain)
-    assert all(lie.exposed and not lie.true_in_case for lie in report.lies)
+    assert all(
+        lie.exposed and not lie.true_in_case and lie.denies_hidden_fact for lie in report.lies
+    )
     assert report.passed
 
 
@@ -137,11 +141,107 @@ def test_clues_that_contradict_each_other_leave_no_culprit() -> None:
     assert report.necessity == NecessitySkipped()
 
 
+def with_lie(case: Case, claim: dict[str, object], hides_fact: str = "finch_owes_ashcombe") -> Case:
+    data = case.model_dump(mode="json")
+    data["planned_lies"].append(
+        {
+            "id": "extra_lie",
+            "suspect": "dr_finch",
+            "hides_fact": hides_fact,
+            "claim": claim,
+            "says": "I owe nobody anything.",
+        }
+    )
+    return Case.model_validate(data)
+
+
 def test_an_unexposed_lie_warns_without_failing() -> None:
-    case = drop_clue(load("gallery"), "cctv_east_hall")
+    case = with_lie(
+        load("manor"),
+        {"subject": "dr_finch", "predicate": "at", "object": "ballroom", "time_slot": 1},
+    )
     report = check_case(case)
-    wren = next(lie for lie in report.lies if lie.lie_id == "wren_office_lie")
-    assert not wren.exposed
+
+    lie = report.lies[-1]
+    assert not lie.exposed
+    assert lie.true_in_case
+    assert report.passed
+
+
+def test_cli_prints_lie_warnings(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    case = with_lie(
+        load("manor"),
+        {"subject": "dr_finch", "predicate": "at", "object": "ballroom", "time_slot": 1},
+    )
+    path = tmp_path / "manor.json"
+    path.write_text(case.model_dump_json())
+
+    assert main(["check", str(path)]) == 0
+
+    out = capsys.readouterr().out.splitlines()
+    assert out[-4:] == [
+        "lies WARN 1/2 exposed",
+        "  extra_lie: no clue exposes it",
+        "  extra_lie: the case facts allow the claim to be true",
+        "  extra_lie: the claim does not contradict the fact it hides",
+    ]
+
+
+def test_culprit_lie_is_exposed_only_by_a_clue() -> None:
+    case = drop_clue(load("manor"), "diary_page")
+    lie = next(lie for lie in check_case(case).lies if lie.lie_id == "clara_library_lie")
+    assert not lie.exposed
+
+
+def test_lies_never_change_the_culprits() -> None:
+    case = load("lighthouse")
+    without = case.model_copy(update={"planned_lies": ()})
+    for c in (case, without):
+        report = check_case(c)
+        assert report.uniqueness == Unique("mr_quill")
+        assert report.necessity == check_case(case).necessity
+
+
+def test_chain_that_cannot_prove_the_culprit_alone_fails_sufficiency() -> None:
+    case = load("manor")
+    short = case.model_copy(update={"solution_chain": case.solution_chain[:2]})
+
+    report = check_case(short)
+
+    assert report.uniqueness == Unique("clara")
+    assert isinstance(report.sufficiency, Ambiguous)
+    assert report.sufficiency.counterexample.culprit == "dr_finch"
+    assert not report.passed
+
+
+def test_a_fact_named_culprit_is_still_checked() -> None:
+    data = load("manor").model_dump(mode="json")
+    data["facts"][2]["id"] = "culprit"
+    data["clues"][0]["reveals"] = ["culprit"]
+    data["facts"].append(
+        {
+            "id": "pike_in_ballroom",
+            "subject": "mrs_pike",
+            "predicate": "at",
+            "object": "ballroom",
+            "time_slot": 3,
+        }
+    )
+
+    report = check_case(Case.model_validate(data))
+
+    assert report.consistency == Conflict(("culprit", "pike_in_ballroom"), with_culprit=False)
+
+
+def test_wrong_culprit_names_who_the_clues_allow() -> None:
+    case = load("manor").model_copy(update={"culprit": "hobbs"})
+
+    report = check_case(case)
+
+    assert isinstance(report.uniqueness, WrongCulprit)
+    assert report.uniqueness.culprits == ("clara",)
+    assert isinstance(report.consistency, Conflict)
+    assert report.consistency.with_culprit
 
 
 def test_cli_prints_one_line_per_check(capsys: pytest.CaptureFixture[str]) -> None:
@@ -149,6 +249,7 @@ def test_cli_prints_one_line_per_check(capsys: pytest.CaptureFixture[str]) -> No
     assert capsys.readouterr().out.splitlines() == [
         "consistency PASS",
         "uniqueness PASS culprit=clara",
+        "sufficiency PASS chain alone proves culprit=clara",
         "necessity PASS 3/3 chain clues",
         "lies PASS 1/1 exposed",
     ]
@@ -165,3 +266,11 @@ def test_cli_prints_the_counterexample_and_exits_1(
     out = capsys.readouterr().out.splitlines()
     assert out[1] == "uniqueness FAIL culprits=lady_wren,sam_okafor"
     assert out[2].startswith("  counterexample culprit=lady_wren breaks=wren_in_east_hall holds=")
+
+
+def test_lie_that_does_not_deny_its_hidden_fact_warns() -> None:
+    honest = with_lie(
+        load("manor"),
+        {"subject": "dr_finch", "predicate": "at", "object": "ballroom", "time_slot": 1},
+    )
+    assert not check_case(honest).lies[-1].denies_hidden_fact
