@@ -1,12 +1,3 @@
-"""Turn a suspect's reply into the positive, slot-exact claims the verifier judges.
-
-The model fills a loose wire shape (`ClaimRows`); `to_claims` parses it into `Claim`s.
-Parsing never drops a claim the model asserted: a stray id is slugged, a slot on an
-untimed predicate is removed, and an out-of-range slot becomes "no slot", which the
-verifier blocks with "name the exact time". So a sloppy extraction costs a rewrite,
-never an unchecked claim, and never a PydanticAI validation retry (a new replay key).
-"""
-
 import re
 from typing import Literal
 
@@ -39,7 +30,6 @@ class ClaimRows(BaseModel):
 async def extract_claims(
     reply: str, case: Case, suspect_id: Id, *, question: str = "", game_id: str | None = None
 ) -> list[Claim]:
-    """Claims `reply` asserts. `question` is read only to resolve "yes", "then", "there"."""
     agent = Agent(
         CompleteModel(
             ModelRole.FAST,

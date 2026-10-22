@@ -1,15 +1,3 @@
-"""Recorded suspect scenarios, shared by the replay tests and the recorder.
-
-A scenario names an outcome and lists candidate scripts that may produce it. The
-recorder plays candidates live and promotes the recordings of the first sample whose
-real outcome matches; `CHOSEN` names that script. Only the stimulus is selected.
-
-A turn may carry authored `drafts`. Those replace the suspect model for that turn, in
-order, and are test inputs, never recordings: the claims extracted from them are still
-real recorded model calls. Authored drafts exist because a compliant suspect model was
-not provoked into three blocked drafts in a row by any in-world question we tried.
-"""
-
 import json
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
@@ -140,7 +128,6 @@ SCENARIOS = {
 
 
 def chosen(name: str) -> Script:
-    """The recorded script for a scenario; it must be one of the scenario's candidates."""
     raw = json.loads(CHOSEN.read_text())[name]
     script = tuple(Turn(t["question"], tuple(t["present"]), tuple(t["drafts"])) for t in raw)
     if script not in SCENARIOS[name].candidates:

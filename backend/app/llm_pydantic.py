@@ -1,11 +1,3 @@
-"""A PydanticAI `Model` that sends every request through `app.llm.complete`.
-
-Structured output runs in native mode: the agent's output class goes to `complete` as
-`response_format`, so the schema joins the replay key and never enters the prompt text.
-The chat mapping is a pure function of the messages, so one request always hashes to
-one fixture.
-"""
-
 import asyncio
 from typing import Any
 

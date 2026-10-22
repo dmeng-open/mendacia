@@ -1,13 +1,3 @@
-"""One suspect turn as a verified LangGraph: nothing the verifier blocks is ever released.
-
-    retrieve -> generate -> extract -> verify -+-> commit -> END
-                              ^                |
-                              +--- rewrite <---+ (blocked, fewer than 3 attempts)
-                                               +-> fallback -> commit (blocked 3 times)
-
-Callers use `Interrogation.ask`; the graph, thread ids, and checkpointing stay inside.
-"""
-
 import argparse
 import asyncio
 import sys
@@ -65,8 +55,6 @@ class TurnReport:
 
 
 class Interrogation:
-    """Every suspect of one game, each on its own checkpointed thread."""
-
     def __init__(self, case: Case, game_id: str, saver: BaseCheckpointSaver[Any]) -> None:
         self.case = case
         self.game_id = game_id
@@ -84,7 +72,7 @@ class Interrogation:
         )
         state = SuspectState.model_validate(out)
         return TurnReport(
-            turn=state.turn - 1,
+            turn=len(state.history),
             reply=state.history[-1].reply,
             attempts=state.attempts,
             fell_back=state.fell_back,
@@ -216,7 +204,6 @@ async def _log_blocked(seat: Seat, state: SuspectState, action: Action) -> None:
 
 
 def suspect_messages(seat: Seat, state: SuspectState) -> list[dict[str, Any]]:
-    """The generate prompt. A pure function of the seat and the state, so replay keys hold."""
     messages: list[dict[str, Any]] = [{"role": "system", "content": suspect_brief(seat, state)}]
     for x in state.recent:
         messages.append({"role": "user", "content": _player_line(seat.case, x.question, x.shown)})

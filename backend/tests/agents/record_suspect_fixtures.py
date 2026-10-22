@@ -1,12 +1,3 @@
-"""Record the suspect replay fixtures against the real model.
-
-    cd backend && LLM_MODE=record uv run python -m tests.agents.record_suspect_fixtures [name...]
-
-Each candidate script records into its own staging dir. Only the first candidate whose
-real outcome matches the scenario is promoted into the fixtures dir, so a rejected
-attempt leaves no recordings behind. Stops before spending more than RECORD_MAX_USD.
-"""
-
 import asyncio
 import json
 import os

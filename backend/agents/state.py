@@ -1,11 +1,3 @@
-"""Checkpointed state for one suspect in one game, and the Postgres saver that keeps it.
-
-One LangGraph thread per `(game_id, suspect_id)`. The thread carries the durable part of
-the interview (ledger, every clue shown so far, released exchanges) across turns and
-processes. The per-turn scratch is reset by `retrieve` at the start of every turn, so a
-turn that crashed halfway leaves nothing behind that the next turn reads.
-"""
-
 import types
 import typing
 from collections.abc import AsyncIterator, Iterator
@@ -32,16 +24,12 @@ class _Frozen(BaseModel):
 
 
 class Exchange(_Frozen):
-    """One released turn: what the player asked and showed, and what the suspect said."""
-
     question: str
     shown: tuple[Id, ...]
     reply: str
 
 
 class Check(_Frozen):
-    """A checkpointable copy of `ClaimCheck` (a dataclass the serializer cannot type)."""
-
     claim: Claim
     verdict: Verdict
     ref: Id | None
@@ -57,8 +45,6 @@ class Check(_Frozen):
 
 
 class Attempt(_Frozen):
-    """One draft reply, the claims extracted from it, and the verifier's checks."""
-
     draft: str
     claims: tuple[Claim, ...] = ()
     checks: tuple[Check, ...] = ()
@@ -90,7 +76,6 @@ class SuspectState(_Frozen):
 
     @property
     def turn(self) -> int:
-        """The turn being played: released exchanges so far, plus one."""
         return len(self.history) + 1
 
     @property
@@ -100,8 +85,6 @@ class SuspectState(_Frozen):
 
 @dataclass(frozen=True)
 class Seat:
-    """Who is being questioned, in which game. LangGraph run context, never checkpointed."""
-
     case: Case
     suspect: Id
     game_id: str
@@ -141,7 +124,6 @@ def libpq_url(database_url: str) -> str:
 
 @asynccontextmanager
 async def open_checkpointer(database_url: str) -> AsyncIterator[AsyncPostgresSaver]:
-    """Open the saver and create its tables if missing. `setup()` is idempotent."""
     async with AsyncPostgresSaver.from_conn_string(libpq_url(database_url), serde=SERDE) as saver:
         await saver.setup()
         yield saver
