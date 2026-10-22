@@ -2,7 +2,7 @@ ENV_FILE := $(if $(wildcard .env),.env,.env.example)
 ENV_NAMES := $(shell sed -n 's/^\([A-Z_]*\)=.*/\1/p' $(ENV_FILE))
 $(foreach v,$(ENV_NAMES),$(if $(filter environment,$(origin $(v))),,$(eval export $(v) := $(shell sed -n 's/^$(v)=//p' $(ENV_FILE)))))
 
-.PHONY: setup up db-create migrate api test lint typecheck ci
+.PHONY: setup up db-create migrate api test lint typecheck ci doctor
 
 setup:
 	cd backend && uv sync --frozen
@@ -32,3 +32,6 @@ typecheck:
 	cd backend && uv run mypy
 
 ci: lint typecheck test
+
+doctor:
+	cd backend && uv run python -m app.doctor $(if $(SKIP_MODEL),--skip-model)
