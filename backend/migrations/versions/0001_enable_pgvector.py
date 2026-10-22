@@ -1,8 +1,4 @@
-"""enable pgvector
-
-Revision ID: 0001
-Revises:
-"""
+"""enable pgvector"""
 
 from alembic import op
 
