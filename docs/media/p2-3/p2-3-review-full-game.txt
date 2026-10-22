@@ -1,5 +1,5 @@
-===== head 3d92c86cc82573d04608675295fba6d209630873 LLM_MODE=live LANE_MAX_USD=1 DB=mendacia_lane_p23v_2
-cmd: cd backend && PYTHONUNBUFFERED=1 uv run python -m app.cli --case ../cases/lighthouse.json --game-id lane2-p23v < FIFO (held open by a writer; one line written per turn; CLI echoes each input after '> ')
+===== head 698ba237dd62b1b284b33b75dd0522f5b7251a96 LLM_MODE=live LANE_MAX_USD=1 DB=mendacia_lane_p23f_2
+cmd: cd backend && PYTHONUNBUFFERED=1 uv run python -m app.cli --case ../cases/lighthouse.json --game-id lane2-p23f < FIFO (held open by a writer; one line per turn; CLI echoes each input after '> ')
 The Keeper of Gull Point
 Abel Crane, keeper of the Gull Point light, was found dead in the lamp room at 9pm, struck with a brass spanner. A storm had cut the point off from the village, and four people were sheltering there.
 
@@ -23,14 +23,14 @@ You have no hints left. 20 questions, 0 hints left
 > /suspect nell_trask
 You sit down with Nell Trask.
 > /ask Where were you at 9pm, and whom did you see?
-Nell Trask: I was down at the jetty at 9pm, tying off my boat against the surge. Ada Vos saw me there, so you can ask her yourself.
+Nell Trask: I was down at the jetty at 9pm, tying off my boat against the surge. Ada Vos saw me there, and I didn't see anyone else in the lamp room while I was on the water.
 New clue: nell_jetty_testimony: Nell Trask was at the jetty at 9pm, doubling the lines on her boat.
 New clue: ada_saw_nell_testimony: At 9pm Ada Vos saw Nell Trask by lantern light and helped her with a rope.
 19 questions, 0 hints left
 > /suspect ada_vos
 You sit down with Ada Vos.
 > /ask Whom did you see at 9pm?
-Ada Vos: I saw Nell Trask at 9pm, down by the jetty. That's all I can tell you about who I saw.
+Ada Vos: I saw Nell Trask at 9pm, down by the jetty. That's all I'll say about it.
 18 questions, 0 hints left
 > /read boathouse_ledger_page
 Boathouse ledger
@@ -44,7 +44,7 @@ You sit down with Jory Penhale.
 > /present boathouse_ledger
 You will show boathouse_ledger with your next question.
 > /ask The boathouse ledger has you logging a crate at 9:05pm. Where were you at 9pm?
-Jory Penhale: I was in the boathouse at nine, and yes, I wrote that crate in the ledger at five past. I'd rather you hear it from me than find it and wonder why I hid it.
+Jory Penhale: I was in the boathouse at 9pm, and I won't pretend otherwise now that your ledger has me logging that crate at five past. I'd said the keeper's cottage before, and that was a lie, so you're right to press me on it. I didn't see Abel Crane at 9pm, and I can't say who did.
 17 questions, 0 hints left
 > /status
 17 questions, 0 hints left
@@ -54,9 +54,9 @@ Clues found:
   ada_saw_nell_testimony     At 9pm Ada Vos saw Nell Trask by lantern light and helped her with a rope.
   boathouse_ledger           The boathouse ledger has Jory Penhale logging a crate at 9:05pm.
 Documents read: boathouse_ledger_page
-> /accuse mr_quill nell_jetty_testimony ada_saw_nell_testimony boathouse_ledger
+> /accuse mr_quill nell_jetty_testimony boathouse_ledger
 Correct.
-Chain clues cited: nell_jetty_testimony, ada_saw_nell_testimony, boathouse_ledger
+Chain clues cited: nell_jetty_testimony, boathouse_ledger
 What really happened:
   8pm  Nell Trask saw Mr. Quill.
   9pm  Mr. Quill was in the lamp room.
@@ -66,17 +66,16 @@ What really happened:
   9pm  Mr. Quill killed Abel Crane in the lamp room with the brass spanner.
 --- uv run pytest -m live tests/live/test_jailbreak_cli.py -q
 .                                                                        [100%]
-1 passed, 1 deselected in 82.43s (0:01:22)
-rc=0
+1 passed, 1 deselected in 84.51s (0:01:24)
 --- cost
  count |    sum    
 -------+-----------
-    54 | 0.0104618
+    52 | 0.0101532
 (1 row)
 
                   game_id                   | count |          sum          
 --------------------------------------------+-------+-----------------------
- lane2-p23v                                 |     6 | 0.0010489999999999998
- jailbreak-fecd90d9905d4a5c8b114cca5b4da58e |    48 |             0.0094128
+ jailbreak-260f9f2016b846f9a0ced2a84bdd1e92 |    46 |             0.0086616
+ lane2-p23f                                 |     6 | 0.0014915999999999998
 (2 rows)
 
