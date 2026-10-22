@@ -93,6 +93,8 @@ def _run(
 ) -> Recording:
     key = llm_replay.request_key(role, request)
     mode = settings.llm_mode
+    if mode is LlmMode.RECORD and llm_replay.exists(key):
+        mode = LlmMode.REPLAY
     if mode is LlmMode.REPLAY:
         recording = llm_replay.load(key)
     else:
