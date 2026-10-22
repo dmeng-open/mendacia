@@ -14,14 +14,16 @@ MANOR = Case.model_validate_json((ROOT / "cases" / "manor.json").read_text())
 SCRIPT = Path(__file__).parent / "fixtures" / "games" / "manor_full_game.txt"
 
 
-async def lines(script: Path) -> AsyncIterator[str]:
-    for line in script.read_text().splitlines():
-        yield line
+async def given(*commands: str) -> AsyncIterator[str]:
+    for c in commands:
+        yield c
 
 
 def test_replayed_full_game_ends_correct() -> None:
     out: list[str] = []
-    game = asyncio.run(play(MANOR, uuid.uuid4().hex, lines(SCRIPT), out.append))
+    game = asyncio.run(
+        play(MANOR, uuid.uuid4().hex, given(*SCRIPT.read_text().splitlines()), out.append)
+    )
 
     transcript = "\n".join(out)
     assert "20 questions, 3 hints left" in transcript
@@ -34,11 +36,6 @@ def test_replayed_full_game_ends_correct() -> None:
     )
     assert any("Clara Ashcombe killed Lord Edmund Ashcombe" in line for line in out)
     assert game.state.questions_left == 18
-
-
-async def given(*commands: str) -> AsyncIterator[str]:
-    for c in commands:
-        yield c
 
 
 def test_screened_question_costs_nothing_and_is_logged() -> None:

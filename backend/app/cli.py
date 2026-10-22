@@ -5,8 +5,6 @@ import uuid
 from collections.abc import AsyncIterator, Callable, Sequence
 from pathlib import Path
 
-import pydantic_ai
-
 from agents.events import log_event
 from agents.game_master import (
     GameState,
@@ -218,7 +216,6 @@ async def _stdin() -> AsyncIterator[str]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    pydantic_ai.BANNER_ENABLED = False
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     parser.add_argument("--case", type=Path, required=True)
     parser.add_argument("--game-id", default=None)
