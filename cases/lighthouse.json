@@ -1,0 +1,197 @@
+{
+  "id": "lighthouse",
+  "title": "The Keeper of Gull Point",
+  "summary": "Abel Crane, keeper of the Gull Point light, was found dead in the lamp room at 9pm, struck with a brass spanner. A storm had cut the point off from the village, and four people were sheltering there.",
+  "victim": {
+    "id": "abel_crane",
+    "name": "Abel Crane",
+    "description": "The old keeper, who had written to the harbour board about the light's failing inspections."
+  },
+  "suspects": [
+    {
+      "id": "jory_penhale",
+      "name": "Jory Penhale",
+      "description": "The assistant keeper, young, broke, and often down at the boathouse after dark."
+    },
+    {
+      "id": "nell_trask",
+      "name": "Nell Trask",
+      "description": "A fisherwoman who tied up at the jetty to wait out the storm."
+    },
+    {
+      "id": "mr_quill",
+      "name": "Mr. Quill",
+      "description": "The harbour board's inspector, who signed the light's last three safety reports."
+    },
+    {
+      "id": "ada_vos",
+      "name": "Ada Vos",
+      "description": "A painter renting the keeper's spare cottage for the season."
+    }
+  ],
+  "locations": {
+    "lamp_room": "the lamp room",
+    "cottage": "the keeper's cottage",
+    "jetty": "the jetty",
+    "boathouse": "the boathouse",
+    "cliff_path": "the cliff path"
+  },
+  "items": {
+    "brass_spanner": "the brass spanner",
+    "storm_lantern": "the storm lantern"
+  },
+  "time_slots": ["7pm", "8pm", "9pm", "10pm"],
+  "crime": {
+    "location": "lamp_room",
+    "time_slot": 3,
+    "means": "brass_spanner"
+  },
+  "facts": [
+    {
+      "id": "quill_in_lamp_room",
+      "subject": "mr_quill",
+      "predicate": "at",
+      "object": "lamp_room",
+      "time_slot": 3,
+      "known_by": ["mr_quill"]
+    },
+    {
+      "id": "quill_has_spanner",
+      "subject": "mr_quill",
+      "predicate": "has",
+      "object": "brass_spanner",
+      "known_by": ["mr_quill", "jory_penhale"]
+    },
+    {
+      "id": "nell_at_jetty",
+      "subject": "nell_trask",
+      "predicate": "at",
+      "object": "jetty",
+      "time_slot": 3,
+      "known_by": ["nell_trask", "ada_vos"]
+    },
+    {
+      "id": "ada_saw_nell",
+      "subject": "ada_vos",
+      "predicate": "saw",
+      "object": "nell_trask",
+      "time_slot": 3,
+      "known_by": ["ada_vos", "nell_trask"]
+    },
+    {
+      "id": "jory_in_boathouse",
+      "subject": "jory_penhale",
+      "predicate": "at",
+      "object": "boathouse",
+      "time_slot": 3,
+      "known_by": ["jory_penhale"]
+    },
+    {
+      "id": "jory_owes_crane",
+      "subject": "jory_penhale",
+      "predicate": "owes",
+      "object": "abel_crane",
+      "known_by": ["jory_penhale", "nell_trask"]
+    },
+    {
+      "id": "nell_saw_quill",
+      "subject": "nell_trask",
+      "predicate": "saw",
+      "object": "mr_quill",
+      "time_slot": 2,
+      "known_by": ["nell_trask", "mr_quill"]
+    }
+  ],
+  "secrets": {
+    "mr_quill": ["quill_in_lamp_room", "quill_has_spanner"],
+    "jory_penhale": ["jory_in_boathouse", "jory_owes_crane"]
+  },
+  "planned_lies": [
+    {
+      "id": "quill_cottage_lie",
+      "suspect": "mr_quill",
+      "hides_fact": "quill_in_lamp_room",
+      "claim": {
+        "subject": "mr_quill",
+        "predicate": "at",
+        "object": "cottage",
+        "time_slot": 3
+      },
+      "says": "By nine I was in the cottage drying off by the stove. I had finished with the lamp hours before."
+    },
+    {
+      "id": "jory_cottage_lie",
+      "suspect": "jory_penhale",
+      "hides_fact": "jory_in_boathouse",
+      "claim": {
+        "subject": "jory_penhale",
+        "predicate": "at",
+        "object": "cottage",
+        "time_slot": 3
+      },
+      "says": "I was in the cottage at nine, same as everyone with any sense."
+    }
+  ],
+  "clues": [
+    {
+      "id": "nell_jetty_testimony",
+      "kind": "testimony",
+      "description": "Nell Trask was at the jetty at 9pm, doubling the lines on her boat.",
+      "reveals": ["nell_at_jetty"]
+    },
+    {
+      "id": "ada_saw_nell_testimony",
+      "kind": "testimony",
+      "description": "At 9pm Ada Vos saw Nell Trask by lantern light and helped her with a rope.",
+      "reveals": ["ada_saw_nell"]
+    },
+    {
+      "id": "boathouse_ledger",
+      "kind": "evidence",
+      "description": "The boathouse ledger has Jory Penhale logging a crate at 9:05pm.",
+      "reveals": ["jory_in_boathouse"],
+      "doc_id": "boathouse_ledger_page"
+    },
+    {
+      "id": "lamp_log",
+      "kind": "evidence",
+      "description": "The lamp room log has an entry in Mr. Quill's hand timed 9pm.",
+      "reveals": ["quill_in_lamp_room"],
+      "doc_id": "lamp_room_log"
+    },
+    {
+      "id": "spanner_testimony",
+      "kind": "testimony",
+      "description": "Jory Penhale lent Mr. Quill the brass spanner that afternoon.",
+      "reveals": ["quill_has_spanner"]
+    },
+    {
+      "id": "debt_testimony",
+      "kind": "testimony",
+      "description": "Nell Trask heard the keeper tell Jory his debt was overdue.",
+      "reveals": ["jory_owes_crane"]
+    },
+    {
+      "id": "cliff_path_testimony",
+      "kind": "testimony",
+      "description": "At 8pm Nell Trask passed Mr. Quill on the way up from the jetty.",
+      "reveals": ["nell_saw_quill"]
+    }
+  ],
+  "documents": [
+    {
+      "id": "boathouse_ledger_page",
+      "title": "Boathouse ledger",
+      "body": "Crates in, Thursday. 9:05pm, one crate, no markings, received J.P. Storm rising, tide high at ten.",
+      "is_key": true
+    },
+    {
+      "id": "lamp_room_log",
+      "title": "Lamp room log",
+      "body": "21:00. Lens turned and checked, mechanism sound. Inspection passed. Signed, H. Quill, harbour board.",
+      "is_key": false
+    }
+  ],
+  "solution_chain": ["nell_jetty_testimony", "ada_saw_nell_testimony", "boathouse_ledger"],
+  "culprit": "mr_quill"
+}

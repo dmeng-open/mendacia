@@ -1,0 +1,193 @@
+{
+  "id": "manor",
+  "title": "Death at Ashcombe Manor",
+  "summary": "Lord Edmund Ashcombe was found dead in his study at 10pm, struck down with his own silver letter opener. Four people were in the house that night, and each of them had a reason to be somewhere they should not have been.",
+  "victim": {
+    "id": "lord_ashcombe",
+    "name": "Lord Edmund Ashcombe",
+    "description": "The master of the manor, wealthy, sharp-tongued, and about to rewrite his will."
+  },
+  "suspects": [
+    {
+      "id": "hobbs",
+      "name": "Mr. Hobbs",
+      "description": "The butler, thirty years in service and loyal to a fault."
+    },
+    {
+      "id": "clara",
+      "name": "Clara Ashcombe",
+      "description": "The victim's niece, who stood to lose her inheritance under the new will."
+    },
+    {
+      "id": "dr_finch",
+      "name": "Dr. Alistair Finch",
+      "description": "The family physician, a guest for the weekend with debts he never mentions."
+    },
+    {
+      "id": "mrs_pike",
+      "name": "Mrs. Pike",
+      "description": "The cook, who misses nothing that happens below stairs."
+    }
+  ],
+  "locations": {
+    "study": "the study",
+    "library": "the library",
+    "kitchen": "the kitchen",
+    "garden": "the garden pavilion",
+    "ballroom": "the ballroom"
+  },
+  "items": {
+    "letter_opener": "the silver letter opener",
+    "candlestick": "the brass candlestick"
+  },
+  "time_slots": ["8pm", "9pm", "10pm", "11pm"],
+  "crime": {
+    "location": "study",
+    "time_slot": 3,
+    "means": "letter_opener"
+  },
+  "facts": [
+    {
+      "id": "clara_in_study",
+      "subject": "clara",
+      "predicate": "at",
+      "object": "study",
+      "time_slot": 3,
+      "known_by": ["clara"]
+    },
+    {
+      "id": "clara_has_opener",
+      "subject": "clara",
+      "predicate": "has",
+      "object": "letter_opener",
+      "known_by": ["clara", "hobbs"]
+    },
+    {
+      "id": "pike_in_kitchen",
+      "subject": "mrs_pike",
+      "predicate": "at",
+      "object": "kitchen",
+      "time_slot": 3,
+      "known_by": ["mrs_pike", "hobbs"]
+    },
+    {
+      "id": "pike_saw_hobbs",
+      "subject": "mrs_pike",
+      "predicate": "saw",
+      "object": "hobbs",
+      "time_slot": 3,
+      "known_by": ["mrs_pike", "hobbs"]
+    },
+    {
+      "id": "finch_in_garden",
+      "subject": "dr_finch",
+      "predicate": "at",
+      "object": "garden",
+      "time_slot": 3,
+      "known_by": ["dr_finch"]
+    },
+    {
+      "id": "finch_owes_ashcombe",
+      "subject": "dr_finch",
+      "predicate": "owes",
+      "object": "lord_ashcombe",
+      "known_by": ["dr_finch"]
+    },
+    {
+      "id": "hobbs_in_ballroom",
+      "subject": "hobbs",
+      "predicate": "at",
+      "object": "ballroom",
+      "time_slot": 2,
+      "known_by": ["hobbs", "clara"]
+    }
+  ],
+  "secrets": {
+    "clara": ["clara_in_study", "clara_has_opener"],
+    "dr_finch": ["finch_owes_ashcombe"]
+  },
+  "planned_lies": [
+    {
+      "id": "clara_library_lie",
+      "suspect": "clara",
+      "hides_fact": "clara_in_study",
+      "claim": {
+        "subject": "clara",
+        "predicate": "at",
+        "object": "library",
+        "time_slot": 3
+      },
+      "says": "I was reading in the library all evening. I never went near my uncle's study."
+    }
+  ],
+  "clues": [
+    {
+      "id": "pike_kitchen_testimony",
+      "kind": "testimony",
+      "description": "Mrs. Pike was in the kitchen at 10pm, plating the late supper.",
+      "reveals": ["pike_in_kitchen"]
+    },
+    {
+      "id": "pike_saw_hobbs_testimony",
+      "kind": "testimony",
+      "description": "At 10pm Mrs. Pike saw Mr. Hobbs come in for the supper tray.",
+      "reveals": ["pike_saw_hobbs"]
+    },
+    {
+      "id": "pavilion_book",
+      "kind": "evidence",
+      "description": "The pavilion visitors' book has Dr. Finch signed in from 9:55pm to 10:40pm.",
+      "reveals": ["finch_in_garden"],
+      "doc_id": "pavilion_visitors_book"
+    },
+    {
+      "id": "diary_page",
+      "kind": "evidence",
+      "description": "A torn diary page in Clara's hand says she went to the study at ten.",
+      "reveals": ["clara_in_study"],
+      "doc_id": "clara_diary_page"
+    },
+    {
+      "id": "opener_case",
+      "kind": "evidence",
+      "description": "The empty case of the letter opener was found in Clara's dressing table.",
+      "reveals": ["clara_has_opener"],
+      "doc_id": "opener_case_note"
+    },
+    {
+      "id": "debt_ledger",
+      "kind": "evidence",
+      "description": "Lord Ashcombe's ledger records a large loan to Dr. Finch, still unpaid.",
+      "reveals": ["finch_owes_ashcombe"],
+      "doc_id": "ashcombe_ledger"
+    }
+  ],
+  "documents": [
+    {
+      "id": "pavilion_visitors_book",
+      "title": "Garden pavilion visitors' book",
+      "body": "Saturday. 9:55pm, Dr. A. Finch, in. 10:40pm, Dr. A. Finch, out. Remarks: lamp left burning.",
+      "is_key": true
+    },
+    {
+      "id": "clara_diary_page",
+      "title": "Torn diary page",
+      "body": "He will not listen. At ten I am going to the study to have it out with him, whatever it costs me.",
+      "is_key": false
+    },
+    {
+      "id": "opener_case_note",
+      "title": "Housekeeper's note on the letter opener case",
+      "body": "Found the velvet case for His Lordship's silver letter opener in Miss Clara's dressing table, empty.",
+      "is_key": false
+    },
+    {
+      "id": "ashcombe_ledger",
+      "title": "Page from Lord Ashcombe's ledger",
+      "body": "Loan to Dr. A. Finch, two thousand pounds, due at Michaelmas. Not repaid. Raise this with him on Saturday.",
+      "is_key": false
+    }
+  ],
+  "solution_chain": ["pike_kitchen_testimony", "pike_saw_hobbs_testimony", "pavilion_book"],
+  "culprit": "clara"
+}
