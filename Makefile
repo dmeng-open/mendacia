@@ -2,7 +2,7 @@ ENV_FILE := $(if $(wildcard .env),.env,.env.example)
 ENV_NAMES := $(shell sed -n 's/^\([A-Z_]*\)=.*/\1/p' $(ENV_FILE))
 $(foreach v,$(ENV_NAMES),$(if $(filter environment,$(origin $(v))),,$(eval export $(v) := $(shell sed -n 's/^$(v)=//p' $(ENV_FILE)))))
 
-.PHONY: setup up db-create migrate api test lint typecheck ci doctor validate-cases
+.PHONY: setup up db-create migrate api test lint typecheck ci doctor validate-cases check-case
 
 setup:
 	cd backend && uv sync --frozen
@@ -38,3 +38,6 @@ doctor:
 
 validate-cases:
 	PYTHONPATH=backend uv run --project backend python -m engine.cli validate cases/*.json
+
+check-case:
+	PYTHONPATH=backend uv run --project backend python -m engine.cli check $(CASE)
