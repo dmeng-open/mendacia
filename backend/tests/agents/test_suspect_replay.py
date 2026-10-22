@@ -155,7 +155,7 @@ def test_replayed_turn_overhead() -> None:
 
     async def turns(room: Interrogation) -> list[float]:
         out = []
-        for _ in range(10):
+        for _ in range(50):
             for t in script:
                 started = time.perf_counter()
                 await room.ask("clara", t.question, t.present)
@@ -165,5 +165,9 @@ def test_replayed_turn_overhead() -> None:
 
     durations = sorted(run(turns))
     p95 = durations[math.ceil(0.95 * len(durations)) - 1]
-    print(f"replayed turn p50={durations[len(durations) // 2] * 1000:.0f}ms p95={p95 * 1000:.0f}ms")
+    slowest = " ".join(f"{d * 1000:.0f}" for d in durations[-5:])
+    print(
+        f"replayed turn n={len(durations)} p50={durations[len(durations) // 2] * 1000:.0f}ms"
+        f" p95={p95 * 1000:.0f}ms slowest={slowest}ms"
+    )
     assert p95 < 0.2
