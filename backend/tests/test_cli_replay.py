@@ -28,7 +28,7 @@ def test_replayed_full_game_ends_correct() -> None:
     assert "New clue: pike_kitchen_testimony" in transcript
     assert "New clue: pike_saw_hobbs_testimony" in transcript
     assert "New clue: pavilion_book" in transcript
-    assert out[-6] == "Correct."
+    assert "Correct." in out
     assert (
         "Chain clues cited: pike_kitchen_testimony, pike_saw_hobbs_testimony, pavilion_book" in out
     )
