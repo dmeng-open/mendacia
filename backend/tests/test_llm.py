@@ -75,14 +75,14 @@ def test_record_then_replay_complete(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, anthropic_key: None
 ) -> None:
     monkeypatch.setattr(llm_replay, "FIXTURES_DIR", tmp_path)
-    monkeypatch.setattr("app.llm.litellm.completion", fake_completion("pong"))
-    monkeypatch.setattr("app.llm.litellm.completion_cost", lambda _: 0.0)
+    monkeypatch.setattr("litellm.completion", fake_completion("pong"))
+    monkeypatch.setattr("litellm.completion_cost", lambda _: 0.0)
     monkeypatch.setenv("LLM_MODE", "record")
     messages = [{"role": "user", "content": uuid4().hex}]
     recorded_purpose = uuid4().hex
     first = complete(ModelRole.FAST, messages, purpose=recorded_purpose)
 
-    monkeypatch.setattr("app.llm.litellm.completion", fail)
+    monkeypatch.setattr("litellm.completion", fail)
     monkeypatch.setenv("LLM_MODE", "replay")
     replay_purpose = uuid4().hex
     second = complete(ModelRole.FAST, messages, purpose=replay_purpose)
@@ -102,13 +102,13 @@ def test_record_then_replay_embed(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
             usage=SimpleNamespace(prompt_tokens=4),
         )
 
-    monkeypatch.setattr("app.llm.litellm.embedding", fake_embedding)
-    monkeypatch.setattr("app.llm.litellm.completion_cost", lambda _: 0.0)
+    monkeypatch.setattr("litellm.embedding", fake_embedding)
+    monkeypatch.setattr("litellm.completion_cost", lambda _: 0.0)
     monkeypatch.setenv("LLM_MODE", "record")
     texts = [uuid4().hex]
     first = embed(texts, purpose=uuid4().hex)
 
-    monkeypatch.setattr("app.llm.litellm.embedding", fail)
+    monkeypatch.setattr("litellm.embedding", fail)
     monkeypatch.setenv("LLM_MODE", "replay")
     purpose = uuid4().hex
     second = embed(texts, purpose=purpose)
@@ -127,7 +127,7 @@ def test_live_and_record_without_key_raise(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mode: str
 ) -> None:
     monkeypatch.setattr(llm_replay, "FIXTURES_DIR", tmp_path)
-    monkeypatch.setattr("app.llm.litellm.completion", fail)
+    monkeypatch.setattr("litellm.completion", fail)
     monkeypatch.setenv("MODEL_FAST", "anthropic/test-model")
     monkeypatch.delenv("MENDACIA_ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setenv("LLM_MODE", mode)
