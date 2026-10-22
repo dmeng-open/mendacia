@@ -61,6 +61,11 @@ def _fallback(rs: Sequence[TurnReport]) -> bool:
     return _fell_back(r)
 
 
+def _unchecked_then_plain(rs: Sequence[TurnReport]) -> bool:
+    (r,) = rs
+    return r.rewrites == 1 and not r.fell_back and r.attempts[0].unchecked
+
+
 def _lie_then_fallback(rs: Sequence[TurnReport]) -> bool:
     lie, dodge = rs
     return _clean(lie, Verdict.PLANNED_LIE) and _fell_back(dodge)
@@ -103,6 +108,22 @@ SCENARIOS = {
                 ),
             ),
             _fallback,
+        ),
+        Scenario(
+            "unchecked_rewrite",
+            "hobbs",
+            (
+                (
+                    Turn(
+                        "Tell me about the family.",
+                        drafts=(
+                            "Lord Ashcombe was a hard man to serve, sir.",
+                            "It is not my place to say, sir.",
+                        ),
+                    ),
+                ),
+            ),
+            _unchecked_then_plain,
         ),
         Scenario(
             "lie_then_fallback",

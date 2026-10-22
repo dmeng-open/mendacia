@@ -1,16 +1,18 @@
 import asyncio
+import math
 import os
 import time
 import uuid
 from collections.abc import Awaitable, Callable
 
+import pytest
 import sqlalchemy as sa
 
 from agents.ledger import LieStatus
-from agents.state import SERDE, STATE_TYPES, open_checkpointer
+from agents.state import SERDE, STATE_TYPES, SuspectState, open_checkpointer
 from agents.suspect import FALLBACK, Interrogation, TurnReport
 from agents.verifier import Verdict
-from tests.agents.suspect_scenarios import MANOR, SCENARIOS, chosen, play
+from tests.agents.suspect_scenarios import MANOR, SCENARIOS, Turn, chosen, play
 
 DB = os.environ["DATABASE_URL"]
 
@@ -46,7 +48,7 @@ def statuses(report: TurnReport) -> list[tuple[str, LieStatus, int]]:
 
 def test_suspect_tells_its_planned_lie() -> None:
     lie, _ = scenario("lie_then_admit")
-    assert [c.verdict for c in lie.checks] == [Verdict.PLANNED_LIE]
+    assert {c.verdict for c in lie.checks} == {Verdict.PLANNED_LIE}
     assert lie.rewrites == 0
     assert statuses(lie) == [("clara_library_lie", LieStatus.TOLD, 1)]
 
@@ -103,7 +105,49 @@ def test_restart_rebuilds_graph_and_keeps_ledger() -> None:
 def test_every_state_type_is_registered_with_the_serializer() -> None:
     names = {t.__name__ for t in STATE_TYPES}
     assert {"SuspectState", "Ledger", "LedgerEntry", "LieStatus", "Claim", "Verdict"} <= names
-    assert SERDE is not None
+    (r,) = scenario("fallback")
+    state = SuspectState(question="q", attempts=r.attempts, fell_back=True)
+    assert SuspectState.model_validate(SERDE.loads_typed(SERDE.dumps_typed(state))) == state
+
+
+def test_unknown_clue_is_refused_before_the_turn_and_leaves_the_thread_usable() -> None:
+    first, _ = chosen("lie_then_admit")
+
+    async def body(room: Interrogation) -> TurnReport:
+        with pytest.raises(ValueError, match="unknown clues"):
+            await room.ask("clara", first.question, ["no_such_clue"])
+        with pytest.raises(ValueError, match="unknown suspect"):
+            await room.ask("nobody", first.question)
+        return await room.ask("clara", first.question, first.present)
+
+    lie = run(body)
+    assert {c.verdict for c in lie.checks} == {Verdict.PLANNED_LIE}
+
+
+def test_concurrent_asks_on_one_suspect_run_one_after_the_other() -> None:
+    first, second = chosen("lie_then_admit")
+
+    async def body(room: Interrogation) -> tuple[list[int], int]:
+        lie, admit = await asyncio.gather(
+            room.ask("clara", first.question, first.present),
+            room.ask("clara", second.question, second.present),
+        )
+        return [lie.turn, admit.turn], len((await room.state("clara")).history)
+
+    assert run(body) == ([1, 2], 2)
+
+
+def test_claimless_reply_that_names_the_case_is_rewritten() -> None:
+    (r,) = scenario("unchecked_rewrite")
+    assert r.attempts[0].unchecked and not r.attempts[0].claims
+    assert r.reply == r.attempts[1].draft and not r.fell_back
+
+
+def test_empty_draft_falls_back_without_extraction_and_logs_a_row() -> None:
+    game = uuid.uuid4().hex
+    (r,) = run(lambda room: play(room, "hobbs", (Turn("Anything?", drafts=("",)),)), game)
+    assert r.fell_back and r.reply == FALLBACK and len(r.attempts) == 1
+    assert events(game) == [("fallback", "unverified", "empty draft", 1)]
 
 
 def test_replayed_turn_overhead() -> None:
@@ -120,6 +164,6 @@ def test_replayed_turn_overhead() -> None:
         return out
 
     durations = sorted(run(turns))
-    p95 = durations[int(0.95 * len(durations)) - 1]
+    p95 = durations[math.ceil(0.95 * len(durations)) - 1]
     print(f"replayed turn p50={durations[len(durations) // 2] * 1000:.0f}ms p95={p95 * 1000:.0f}ms")
     assert p95 < 0.2

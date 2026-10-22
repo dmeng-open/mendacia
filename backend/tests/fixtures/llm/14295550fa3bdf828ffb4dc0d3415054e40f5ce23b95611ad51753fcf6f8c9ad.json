@@ -15,9 +15,9 @@
     "max_tokens": 1024,
     "response_format": null
   },
-  "output": "I was in the library at ten o'clock, reading. I never went near my uncle's study that night.",
+  "output": "I was in the library at ten o'clock, reading. I never went near my uncle's study, Detective.",
   "prompt_tokens": 494,
-  "completion_tokens": 31,
-  "cost_usd": 0.00006489999999999999,
-  "latency_ms": 923
+  "completion_tokens": 33,
+  "cost_usd": 0.00006589999999999999,
+  "latency_ms": 1723
 }

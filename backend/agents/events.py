@@ -5,7 +5,7 @@ import sqlalchemy as sa
 from app.config import Settings
 from app.db import sync_engine
 
-Rule = Literal["block_culprit", "block_unplanned", "input_screen"]
+Rule = Literal["block_culprit", "block_unplanned", "unverified", "input_screen"]
 
 Action = Literal["block", "rewrite", "fallback", "refuse"]
 

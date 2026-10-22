@@ -17,6 +17,7 @@ from agents.verifier import ClaimCheck, Verdict
 from engine.schema import Case, Id
 
 HISTORY_WINDOW = 6
+UNCHECKED = "say it again in short, plain sentences: what you know, or that you do not know"
 
 
 class _Frozen(BaseModel):
@@ -49,13 +50,20 @@ class Attempt(_Frozen):
     claims: tuple[Claim, ...] = ()
     checks: tuple[Check, ...] = ()
     unreadable: bool = False
+    unchecked: bool = False
 
     @property
     def blocked(self) -> tuple[Check, ...]:
         return tuple(c for c in self.checks if c.verdict.blocks)
 
     @property
+    def verified(self) -> bool:
+        return bool(self.draft) and not (self.unreadable or self.unchecked or self.blocked)
+
+    @property
     def feedback(self) -> str:
+        if self.unreadable or self.unchecked:
+            return f"- {UNCHECKED}"
         return "\n".join(f"- {c.claim.render()}: {c.reason}" for c in self.blocked)
 
 
@@ -77,6 +85,10 @@ class SuspectState(_Frozen):
     @property
     def turn(self) -> int:
         return len(self.history) + 1
+
+    @property
+    def shown(self) -> tuple[Id, ...]:
+        return tuple(sorted({*self.presented, *self.present}))
 
     @property
     def recent(self) -> tuple[Exchange, ...]:

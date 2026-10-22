@@ -7,8 +7,6 @@ import tempfile
 import uuid
 from pathlib import Path
 
-import pydantic_ai
-
 from agents.state import open_checkpointer
 from agents.suspect import Interrogation
 from app import llm_replay
@@ -74,5 +72,4 @@ async def _main(names: list[str]) -> None:
 
 
 if __name__ == "__main__":
-    pydantic_ai.BANNER_ENABLED = False
     asyncio.run(_main(sys.argv[1:]))

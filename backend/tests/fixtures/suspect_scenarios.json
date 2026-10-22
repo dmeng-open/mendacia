@@ -46,7 +46,17 @@
     {
       "drafts": [],
       "present": [],
-      "question": "Walk me through your whole evening, hour by hour."
+      "question": "Who did you see tonight, and where, hour by hour?"
+    }
+  ],
+  "unchecked_rewrite": [
+    {
+      "drafts": [
+        "Lord Ashcombe was a hard man to serve, sir.",
+        "It is not my place to say, sir."
+      ],
+      "present": [],
+      "question": "Tell me about the family."
     }
   ]
 }
