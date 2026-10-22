@@ -1,0 +1,6 @@
+/suspect mrs_pike
+/ask Where were you at 10pm?
+/ask Whom did you see at 10pm?
+/read pavilion_visitors_book
+/status
+/accuse clara pike_kitchen_testimony pike_saw_hobbs_testimony pavilion_book
