@@ -60,13 +60,13 @@ class Embedding:
     latency_ms: int
 
 
-MODEL_FIELDS = {
-    ModelRole.FAST: "fast_model",
-    ModelRole.STRONG: "strong_model",
-    ModelRole.EMBED: "embed_model",
+MODELS: dict[ModelRole, Callable[[Settings], str]] = {
+    ModelRole.FAST: lambda s: s.fast_model,
+    ModelRole.STRONG: lambda s: s.strong_model,
+    ModelRole.EMBED: lambda s: s.embed_model,
 }
 
-# provider -> (env var name, key reader); other providers read their own env vars via LiteLLM
+# Providers missing here fall back to LiteLLM reading its own env vars.
 PROVIDER_KEYS: dict[str, tuple[str, Callable[[Settings], Any]]] = {
     "anthropic": ("MENDACIA_ANTHROPIC_API_KEY", lambda s: s.anthropic_api_key),
 }
@@ -102,7 +102,7 @@ def _run(
     if mode is LlmMode.REPLAY:
         recording = llm_replay.load(key)
     else:
-        model = getattr(settings, MODEL_FIELDS[role])
+        model = MODELS[role](settings)
         kwargs = _api_key_kwargs(settings, model)
         started = time.monotonic()
         response, cost = live_call(model, kwargs)

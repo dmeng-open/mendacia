@@ -5,7 +5,7 @@ from pathlib import Path
 
 BACKEND = Path(__file__).resolve().parents[1]
 ROOT = BACKEND.parent
-LITELLM_ALLOWED = {BACKEND / "app" / "llm.py", BACKEND / "tests" / "test_llm.py"}
+LITELLM_HOME = BACKEND / "app" / "llm.py"
 MODEL_NAME = re.compile(
     "|".join(re.escape(p + "-") for p in ("gpt", "claude", "gemini", "text-embedding"))
 )
@@ -38,7 +38,7 @@ def violations() -> list[str]:
     found = []
     for path in _scanned_files():
         rel = path.relative_to(ROOT)
-        if path.suffix == ".py" and path not in LITELLM_ALLOWED and _imports_litellm(path):
+        if path.suffix == ".py" and path != LITELLM_HOME and _imports_litellm(path):
             found.append(f"{rel}: imports litellm; call app.llm instead")
         for number, line in enumerate(path.read_text().splitlines(), 1):
             if MODEL_NAME.search(line):
