@@ -18,6 +18,7 @@ UNKNOWN = "leave this claim out; it is not something you know or planned to say"
 class Verdict(StrEnum):
     BLOCK_CULPRIT = "block_culprit"
     ADMISSION = "admission"
+    DENIAL = "denial"
     KNOWN_TRUE = "known_true"
     PLANNED_LIE = "planned_lie"
     BLOCK_UNPLANNED = "block_unplanned"
@@ -162,6 +163,8 @@ def _is_admission(
 
 
 def _judge(claim: Claim, v: _View) -> ClaimCheck:
+    if claim.negated:
+        return _judge_denial(claim, v)
     if claim.predicate == "killed" and claim.subject == v.culprit:
         return ClaimCheck(claim, Verdict.BLOCK_CULPRIT, None, _block_reason(claim, v))
     for f in v.culprit_hidden:
@@ -183,6 +186,16 @@ def _judge(claim: Claim, v: _View) -> ClaimCheck:
     return ClaimCheck(claim, Verdict.BLOCK_UNPLANNED, None, _block_reason(claim, v))
 
 
+def _judge_denial(claim: Claim, v: _View) -> ClaimCheck:
+    denied = [f for f in v.facts if claim.denies(f)]
+    if not denied:
+        return ClaimCheck(claim, Verdict.DENIAL, None, "a denial the case does not contradict")
+    for lie in v.lies:
+        if lie.hides_fact in {f.id for f in denied}:
+            return _judge_lie(claim, lie, v)
+    return ClaimCheck(claim, Verdict.BLOCK_UNPLANNED, None, _block_reason(claim, v))
+
+
 def _judge_lie(claim: Claim, lie: PlannedLie, v: _View) -> ClaimCheck:
     def block(reason: str) -> ClaimCheck:
         return ClaimCheck(claim, Verdict.BLOCK_UNPLANNED, lie.id, reason)
@@ -198,6 +211,10 @@ def _judge_lie(claim: Claim, lie: PlannedLie, v: _View) -> ClaimCheck:
 
 
 def _block_reason(claim: Claim, v: _View) -> str:
+    if claim.negated:
+        if any(claim.denies(f) and f.id in v.own_secrets for f in v.facts):
+            return "you may not deny that; refuse to answer instead"
+        return UNKNOWN
     if claim.unspecified:
         return "name the exact time or leave the claim out"
     if any(claim.states(f) and f.id in v.own_secrets for f in v.facts):

@@ -14,6 +14,7 @@ class Claim(BaseModel):
     predicate: ClaimPredicate
     object: Id
     time_slot: int | None = None
+    negated: bool = False
 
     @model_validator(mode="after")
     def _untimed_takes_no_slot(self) -> Self:
@@ -23,10 +24,10 @@ class Claim(BaseModel):
 
     @property
     def unspecified(self) -> bool:
-        return self.time_slot is None and self.predicate in TIMED_PREDICATES
+        return not self.negated and self.time_slot is None and self.predicate in TIMED_PREDICATES
 
     def states(self, s: Statement) -> bool:
-        return (self.subject, self.predicate, self.object, self.time_slot) == (
+        return not self.negated and (self.subject, self.predicate, self.object, self.time_slot) == (
             s.subject,
             s.predicate,
             s.object,
@@ -34,6 +35,12 @@ class Claim(BaseModel):
         )
 
     def could_mean(self, s: Statement) -> bool:
+        return not self.negated and self._same_triple(s)
+
+    def denies(self, s: Statement) -> bool:
+        return self.negated and self._same_triple(s)
+
+    def _same_triple(self, s: Statement) -> bool:
         return (self.subject, self.predicate, self.object) == (
             s.subject,
             s.predicate,
@@ -42,7 +49,8 @@ class Claim(BaseModel):
 
     def render(self) -> str:
         slot = "" if self.time_slot is None else f" @{self.time_slot}"
-        return f"{self.subject} {self.predicate} {self.object}{slot}"
+        neg = "not " if self.negated else ""
+        return f"{neg}{self.subject} {self.predicate} {self.object}{slot}"
 
 
 def contradicts(a: Statement, b: Statement) -> bool:

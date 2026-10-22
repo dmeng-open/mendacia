@@ -269,3 +269,40 @@ def test_stateable_facts_hide_unexposed_culprit_secrets() -> None:
 def test_killed_takes_no_time_slot() -> None:
     with pytest.raises(ValueError, match="takes no time_slot"):
         Claim(subject="clara", predicate="killed", object="lord_ashcombe", time_slot=3)
+
+
+CLARA_NOT_IN_STUDY = Claim(subject="clara", predicate="at", object="study", negated=True)
+
+
+def test_denying_the_hidden_fact_is_the_planned_lie_until_exposed() -> None:
+    result = verify_reply(MANOR, "clara", [CLARA_NOT_IN_STUDY], Ledger(), set())
+    assert [(c.verdict, c.ref) for c in result.checks] == [
+        (Verdict.PLANNED_LIE, "clara_library_lie")
+    ]
+    assert [e.status for e in result.commit(1).entries] == [LieStatus.TOLD]
+    assert verdicts("clara", CLARA_NOT_IN_STUDY, shown="diary_page") == ["BLOCK_UNPLANNED"]
+
+
+def test_denying_a_known_true_fact_blocks() -> None:
+    denial = Claim(subject="hobbs", predicate="at", object="ballroom", time_slot=2, negated=True)
+    assert verdicts("hobbs", denial) == ["BLOCK_UNPLANNED"]
+
+
+def test_innocent_denying_a_culprit_secret_blocks_with_a_neutral_reason() -> None:
+    [check] = verify_reply(MANOR, "hobbs", [CLARA_NOT_IN_STUDY], Ledger(), set()).checks
+    assert check.verdict is Verdict.BLOCK_UNPLANNED
+    other = Claim(subject="mrs_pike", predicate="at", object="study", time_slot=3)
+    [plain] = verify_reply(MANOR, "hobbs", [other], Ledger(), set()).checks
+    assert check.reason == plain.reason
+
+
+def test_denial_the_case_does_not_contradict_passes() -> None:
+    denials = [
+        Claim(subject="clara", predicate="killed", object="lord_ashcombe", negated=True),
+        Claim(subject="hobbs", predicate="at", object="study", time_slot=3, negated=True),
+    ]
+    assert verdicts("hobbs", *denials) == ["DENIAL", "DENIAL"]
+
+
+def test_denial_renders_with_not() -> None:
+    assert CLARA_NOT_IN_STUDY.render() == "not clara at study"

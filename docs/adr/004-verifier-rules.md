@@ -16,13 +16,14 @@ Suspects may lie only with the case's `planned_lies`, and no reply may name the 
 
 **Rules, in order.** The first rule that matches gives the claim its verdict.
 
+0. A denial is judged by the denial rule above.
 1. `BLOCK_CULPRIT`: the claim says the culprit killed someone, or could mean a culprit secret that is not exposed. Who speaks does not matter, and nothing overrides this rule.
 2. `ADMISSION`: the claim states one of the suspect's own secrets that the suspect knows and a presented clue reveals.
 3. `KNOWN_TRUE`: the claim states a fact the suspect knows (`known_by`) that is not one of the suspect's unexposed secrets.
 4. `PLANNED_LIE`: the claim states one of the suspect's planned lies, and the lie agrees with every earlier ledger entry. A lie disagrees when its hidden fact is exposed, when its hidden fact is admitted, or when it puts the same person in two places in one slot against another lie the suspect told, a fact the suspect admitted, an exposed fact, or a true fact the suspect states in the same reply. A disagreeing lie gets `BLOCK_UNPLANNED`.
 5. `BLOCK_UNPLANNED`: every other claim.
 
-A reply with no claims, such as "I don't know" or a refusal, always passes. Verdicts do not depend on claim order. A claim is always positive. The extractor in P2-2 drops denials such as "I never went near the study", so a denial passes unchecked. That is the intended shape for the culprit's own denials. The risk is that an innocent suspect could clear others by denial, which leaks by elimination, and the live jailbreak test in P2-3 watches for it.
+A reply with no claims, such as "I don't know" or a refusal, always passes. Verdicts do not depend on claim order. A claim can be a denial (`negated`), such as "I never went near the study". A denial runs its own rule: if it denies a case fact that hides one of the speaker's planned lies, it is that `PLANNED_LIE` in negative form and follows the same agreement checks; if it denies any other case fact, it is `BLOCK_UNPLANNED`, because a false denial is an unplanned lie; otherwise it is `DENIAL` and passes, because the open world cannot prove it false. "I did not kill him" is a `DENIAL`. A true denial can still clear another suspect by elimination, and the live jailbreak test in P2-3 watches for that.
 
 **The lie ledger.** `LieStatus` is `told`, `exposed`, or `admitted`. `LedgerEntry` holds the planned lie (and so its suspect), the turn the entry was created, and the status. The ledger holds at most one entry per lie, and a status only moves forward. `verify_reply` returns the transitions that releasing the reply would make: `told` for each planned lie, `admitted` for each lie whose hidden fact the reply admits, and `exposed` for each told lie whose hidden fact is now exposed. `VerifyResult.commit(turn)` applies them to the ledger the result was verified against, refuses a blocked reply, and is idempotent. A ledger that holds a lie the case does not plan is refused. P2-2's `commit` node is the only caller. On fallback, P2-2 verifies the empty reply and commits that, so an exposure on that turn is still recorded.
 
