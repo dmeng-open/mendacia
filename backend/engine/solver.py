@@ -128,8 +128,8 @@ def _consistency(case: Case, no_clues: str) -> Consistency:
     culprit = ("culprit", case.culprit)
     tagged = {("fact", f.id): _atom("holds", f.id) for f in case.facts}
     tagged[culprit] = _atom("culprit", case.culprit)
-    colliding = {("fact", fact_id) for fact_id in _colliding(case.facts)}
-    core = _minimal_conflict(no_clues, tagged, delete_last=frozenset(colliding))
+    clashes = {("fact", fact_id) for fact_id in _slot_clashes(case.facts)}
+    core = _minimal_conflict(no_clues, tagged, keep_longest=frozenset(clashes))
     if core is None:
         return Consistent()
     return Conflict(tuple(i for kind, i in core if kind == "fact"), culprit in core)
@@ -166,10 +166,10 @@ def _lie_check(case: Case, lie: PlannedLie, full: str, no_clues: str) -> LieChec
     every_fact = [_atom("holds", f.id) for f in case.facts]
     return LieCheck(
         lie_id=lie.id,
-        exposed=not _possible(full, [claim], scene=False),
-        true_in_case=_possible(no_clues, [claim, *every_fact], scene=False),
+        exposed=not _possible(full, [claim], crime_applies=False),
+        true_in_case=_possible(no_clues, [claim, *every_fact], crime_applies=False),
         denies_hidden_fact=not _possible(
-            no_clues, [claim, _atom("holds", lie.hides_fact)], scene=False
+            no_clues, [claim, _atom("holds", lie.hides_fact)], crime_applies=False
         ),
     )
 
@@ -185,9 +185,9 @@ def _ground(program: str, *args: str) -> clingo.Control:
     return control
 
 
-def _possible(program: str, atoms: Sequence[clingo.Symbol], *, scene: bool) -> bool:
+def _possible(program: str, atoms: Sequence[clingo.Symbol], *, crime_applies: bool) -> bool:
     control = _ground(program)
-    control.assign_external(clingo.Function("scene"), scene)
+    control.assign_external(clingo.Function("crime_applies"), crime_applies)
     return bool(control.solve(assumptions=[(a, True) for a in atoms]).satisfiable)
 
 
@@ -226,14 +226,14 @@ Tag = tuple[str, str]
 
 
 def _minimal_conflict(
-    program: str, tagged: dict[Tag, clingo.Symbol], delete_last: frozenset[Tag]
+    program: str, tagged: dict[Tag, clingo.Symbol], keep_longest: frozenset[Tag]
 ) -> tuple[Tag, ...] | None:
     control = _ground(program)
 
     def unsat(tags: Sequence[Tag]) -> bool:
         return bool(control.solve(assumptions=[(tagged[t], True) for t in tags]).unsatisfiable)
 
-    core = sorted(tagged, key=lambda t: (t in delete_last, t))
+    core = sorted(tagged, key=lambda t: (t in keep_longest, t))
     if not unsat(core):
         return None
     for tag in list(core):
@@ -243,9 +243,7 @@ def _minimal_conflict(
     return tuple(core)
 
 
-def _colliding(facts: Sequence[Fact]) -> frozenset[str]:
-    # Deleting these last makes the core the local clash, such as two `at` facts for one
-    # person and slot, instead of a longer chain that rules out every suspect.
+def _slot_clashes(facts: Sequence[Fact]) -> frozenset[str]:
     def touches(f: Fact) -> set[tuple[str, int]]:
         if f.time_slot is None:
             return set()

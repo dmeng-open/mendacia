@@ -274,3 +274,24 @@ def test_lie_that_does_not_deny_its_hidden_fact_warns() -> None:
         {"subject": "dr_finch", "predicate": "at", "object": "ballroom", "time_slot": 1},
     )
     assert not check_case(honest).lies[-1].denies_hidden_fact
+
+
+def test_two_people_can_hold_the_means() -> None:
+    data = load("manor").model_dump(mode="json")
+    data["facts"].append(
+        {
+            "id": "hobbs_has_opener",
+            "subject": "hobbs",
+            "predicate": "has",
+            "object": "letter_opener",
+        }
+    )
+    data["clues"].append(
+        {
+            "id": "polishing_testimony",
+            "kind": "testimony",
+            "description": "Mr. Hobbs polished the letter opener that morning.",
+            "reveals": ["hobbs_has_opener"],
+        }
+    )
+    assert check_case(Case.model_validate(data)).uniqueness == Unique("clara")
