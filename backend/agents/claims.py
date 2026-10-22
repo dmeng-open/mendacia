@@ -17,7 +17,7 @@ class Claim(BaseModel):
 
     @model_validator(mode="after")
     def _untimed_takes_no_slot(self) -> Self:
-        if self.predicate in ("has", "owes") and self.time_slot is not None:
+        if self.predicate in ("has", "owes", "killed") and self.time_slot is not None:
             raise ValueError(f"'{self.predicate}' takes no time_slot")
         return self
 

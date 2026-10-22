@@ -7,7 +7,7 @@ import sqlalchemy as sa
 
 from agents.claims import Claim
 from agents.ledger import Ledger, LieStatus
-from agents.verifier import BlockedReply, Verdict, main, verify_reply
+from agents.verifier import BlockedReply, Verdict, main, stateable_facts, verify_reply
 from engine.schema import Case, PlannedLie, Statement
 
 CASES = Path(__file__).resolve().parents[3] / "cases"
@@ -32,7 +32,7 @@ def verdicts(
 
 
 def told(case: Case = MANOR) -> Ledger:
-    return verify_reply(case, "clara", [CLARA_IN_LIBRARY], Ledger(), set()).commit(Ledger(), 1)
+    return verify_reply(case, "clara", [CLARA_IN_LIBRARY], Ledger(), set()).commit(1)
 
 
 def test_known_true() -> None:
@@ -47,7 +47,7 @@ def test_planned_lie_records_told() -> None:
 def test_admission_moves_told_to_admitted() -> None:
     result = verify_reply(MANOR, "clara", [CLARA_IN_STUDY], told(), {"diary_page"})
     assert [c.verdict for c in result.checks] == [Verdict.ADMISSION]
-    [entry] = result.commit(told(), 2).entries
+    [entry] = result.commit(2).entries
     assert (entry.status, entry.turn) == (LieStatus.ADMITTED, 1)
 
 
@@ -103,9 +103,7 @@ def test_lie_is_spent_once_exposed_or_admitted() -> None:
     assert verdicts("clara", CLARA_IN_LIBRARY, ledger=told(), shown="diary_page") == [
         "BLOCK_UNPLANNED"
     ]
-    admitted = verify_reply(MANOR, "clara", [CLARA_IN_STUDY], told(), {"diary_page"}).commit(
-        told(), 2
-    )
+    admitted = verify_reply(MANOR, "clara", [CLARA_IN_STUDY], told(), {"diary_page"}).commit(2)
     assert verdicts("clara", CLARA_IN_LIBRARY, ledger=admitted) == ["BLOCK_UNPLANNED"]
     assert verdicts("clara", CLARA_IN_STUDY, CLARA_IN_LIBRARY, shown="diary_page") == [
         "ADMISSION",
@@ -116,7 +114,7 @@ def test_lie_is_spent_once_exposed_or_admitted() -> None:
 def test_no_claims_pass_and_record_exposure() -> None:
     result = verify_reply(MANOR, "clara", [], told(), {"diary_page"})
     assert result.passed
-    [entry] = result.commit(told(), 2).entries
+    [entry] = result.commit(2).entries
     assert entry.status is LieStatus.EXPOSED
 
 
@@ -128,10 +126,10 @@ def test_verdicts_ignore_claim_order() -> None:
 
 def test_commit_is_idempotent_and_refuses_blocked_replies() -> None:
     result = verify_reply(MANOR, "clara", [CLARA_IN_LIBRARY], Ledger(), set())
-    once = result.commit(Ledger(), 1)
-    assert result.commit(once, 1) == once
-    with pytest.raises(BlockedReply, match="you do not know this to be true"):
-        verify_reply(MANOR, "clara", [CLARA_KILLED], Ledger(), set()).commit(Ledger(), 1)
+    once = result.commit(1)
+    assert result.commit(1) == once
+    with pytest.raises(BlockedReply, match="leave this claim out"):
+        verify_reply(MANOR, "clara", [CLARA_KILLED], Ledger(), set()).commit(1)
 
 
 def test_lever_lane_2(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -198,3 +196,76 @@ def test_lever_logs_one_row_per_blocked_claim(tmp_path: Path) -> None:
         ("block_unplanned", "dr_finch at garden @3", "block"),
         ("block_culprit", "clara killed lord_ashcombe", "block"),
     ]
+
+
+@pytest.mark.parametrize("slot", [3, None])
+def test_block_reason_does_not_depend_on_the_culprit(slot: int | None) -> None:
+    def reason(subject: str, place: str) -> str:
+        claim = Claim(subject=subject, predicate="at", object=place, time_slot=slot)
+        [check] = verify_reply(MANOR, "hobbs", [claim], Ledger(), set()).blocked
+        return check.reason
+
+    culprit_hit = reason("clara", "study")
+    assert {reason("clara", "garden"), reason("clara", "library"), reason("mrs_pike", "study")} == {
+        culprit_hit
+    }
+
+
+def test_feedback_names_no_verdict_or_fact_id() -> None:
+    feedback = verify_reply(
+        MANOR, "hobbs", [CLARA_KILLED, CLARA_HAS_OPENER, CLARA_IN_STUDY], Ledger(), set()
+    ).feedback()
+    for leak in ("culprit", "clara_in_study", "clara_has_opener", "BLOCK"):
+        assert leak not in feedback
+
+
+def test_spent_lie_stays_spent_when_the_clue_is_not_passed_again() -> None:
+    exposed = verify_reply(MANOR, "clara", [], told(), {"diary_page"}).commit(2)
+    assert verdicts("clara", CLARA_IN_LIBRARY, ledger=exposed) == ["BLOCK_UNPLANNED"]
+
+
+def test_commit_applies_to_the_ledger_it_was_verified_against() -> None:
+    result = verify_reply(MANOR, "clara", [], told(), {"diary_page"})
+    [entry] = result.commit(2).entries
+    assert entry.status is LieStatus.EXPOSED
+
+
+def test_ledger_from_another_case_is_refused() -> None:
+    gallery = Case.model_validate_json((CASES / "gallery.json").read_text())
+    foreign = verify_reply(
+        gallery,
+        "sam_okafor",
+        [Claim(subject="sam_okafor", predicate="at", object="west_hall", time_slot=2)],
+        Ledger(),
+        set(),
+    ).commit(1)
+    with pytest.raises(ValueError, match="sam_west_hall_lie"):
+        verify_reply(MANOR, "clara", [], foreign, set())
+
+
+def test_lie_contradicting_a_true_claim_in_the_same_reply_blocks() -> None:
+    second = PlannedLie(
+        id="finch_library_lie",
+        suspect="dr_finch",
+        hides_fact="finch_owes_ashcombe",
+        claim=Statement(subject="dr_finch", predicate="at", object="library", time_slot=3),
+        says="I was in the library.",
+    )
+    case = MANOR.model_copy(update={"planned_lies": (*MANOR.planned_lies, second)})
+    lie = Claim(subject="dr_finch", predicate="at", object="library", time_slot=3)
+    result = verify_reply(case, "dr_finch", [FINCH_IN_GARDEN, lie], Ledger(), set())
+    assert [c.verdict for c in result.checks] == [Verdict.KNOWN_TRUE, Verdict.BLOCK_UNPLANNED]
+
+
+def test_stateable_facts_hide_unexposed_culprit_secrets() -> None:
+    assert [f.id for f in stateable_facts(MANOR, "hobbs", set())] == [
+        "pike_in_kitchen",
+        "pike_saw_hobbs",
+        "hobbs_in_ballroom",
+    ]
+    assert "clara_has_opener" in {f.id for f in stateable_facts(MANOR, "hobbs", {"opener_case"})}
+
+
+def test_killed_takes_no_time_slot() -> None:
+    with pytest.raises(ValueError, match="takes no time_slot"):
+        Claim(subject="clara", predicate="killed", object="lord_ashcombe", time_slot=3)

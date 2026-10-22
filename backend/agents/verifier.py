@@ -12,7 +12,7 @@ from agents.events import Rule, log_event
 from agents.ledger import Ledger, LedgerEntry, LieStatus, Transition
 from engine.schema import Case, Fact, Id, PlannedLie, Statement
 
-UNKNOWN = "you do not know this to be true and it is not a lie you planned"
+UNKNOWN = "leave this claim out; it is not something you know or planned to say"
 
 
 class Verdict(StrEnum):
@@ -51,6 +51,7 @@ class BlockedReply(Exception):
 class VerifyResult:
     checks: tuple[ClaimCheck, ...]
     transitions: tuple[Transition, ...]
+    ledger: Ledger
 
     @property
     def passed(self) -> bool:
@@ -63,14 +64,24 @@ class VerifyResult:
     def feedback(self) -> str:
         return "\n".join(f"- {c.claim.render()}: {c.reason}" for c in self.blocked)
 
-    def commit(self, ledger: Ledger, turn: int) -> Ledger:
+    def commit(self, turn: int) -> Ledger:
         if not self.passed:
             raise BlockedReply(self.feedback())
-        return ledger.apply(self.transitions, turn)
+        return self.ledger.apply(self.transitions, turn)
 
 
 def exposed_facts(case: Case, presented_clue_ids: Collection[Id]) -> frozenset[Id]:
     return frozenset(f for c in case.clues if c.id in presented_clue_ids for f in c.reveals)
+
+
+def stateable_facts(
+    case: Case, suspect_id: Id, presented_clue_ids: Collection[Id]
+) -> tuple[Fact, ...]:
+    exposed = exposed_facts(case, presented_clue_ids)
+    hidden = (
+        set(case.secrets.get(suspect_id, ())) | set(case.secrets.get(case.culprit, ()))
+    ) - exposed
+    return tuple(f for f in case.facts if suspect_id in f.known_by and f.id not in hidden)
 
 
 @dataclass(frozen=True)
@@ -98,12 +109,18 @@ def verify_reply(
     unknown = set(presented_clue_ids) - {c.id for c in case.clues}
     if unknown:
         raise ValueError(f"unknown clues {sorted(unknown)}")
+    foreign = {e.lie.id for e in ledger.entries} - {lie.id for lie in case.planned_lies}
+    if foreign:
+        raise ValueError(f"ledger holds lies this case does not plan: {sorted(foreign)}")
 
-    exposed = exposed_facts(case, presented_clue_ids)
+    entries = ledger.of(suspect_id)
+    spent = {LieStatus.EXPOSED, LieStatus.ADMITTED}
+    exposed = exposed_facts(case, presented_clue_ids) | {
+        e.lie.hides_fact for e in entries if e.status in spent
+    }
     by_id = {f.id: f for f in case.facts}
     own = frozenset(case.secrets.get(suspect_id, ()))
     lies = tuple(lie for lie in case.planned_lies if lie.suspect == suspect_id)
-    entries = ledger.of(suspect_id)
 
     def admits(claim: Claim) -> Id | None:
         return next(
@@ -115,6 +132,7 @@ def verify_reply(
         | {f for f in map(admits, claims) if f is not None}
     )
     told_now = [lie for c in claims for lie in lies if c.states(lie.claim)]
+    stated_now = [f for c in claims for f in case.facts if c.states(f) and suspect_id in f.known_by]
     view = _View(
         suspect=suspect_id,
         culprit=case.culprit,
@@ -128,12 +146,13 @@ def verify_reply(
         admitted=admitted,
         record=(
             *((e.lie.id, e.lie.claim) for e in entries if e.status is not LieStatus.ADMITTED),
-            *((f, by_id[f]) for f in sorted(admitted)),
+            *((f, by_id[f]) for f in sorted(admitted | exposed)),
+            *((f.id, f) for f in stated_now),
             *((lie.id, lie.claim) for lie in told_now),
         ),
     )
     checks = tuple(_judge(c, view) for c in claims)
-    return VerifyResult(checks=checks, transitions=_transitions(checks, view, entries))
+    return VerifyResult(checks, _transitions(checks, view, entries), ledger)
 
 
 def _is_admission(
@@ -144,10 +163,10 @@ def _is_admission(
 
 def _judge(claim: Claim, v: _View) -> ClaimCheck:
     if claim.predicate == "killed" and claim.subject == v.culprit:
-        return ClaimCheck(claim, Verdict.BLOCK_CULPRIT, None, UNKNOWN)
+        return ClaimCheck(claim, Verdict.BLOCK_CULPRIT, None, _block_reason(claim, v))
     for f in v.culprit_hidden:
         if claim.could_mean(f):
-            return ClaimCheck(claim, Verdict.BLOCK_CULPRIT, f.id, UNKNOWN)
+            return ClaimCheck(claim, Verdict.BLOCK_CULPRIT, f.id, _block_reason(claim, v))
 
     for f in v.facts:
         if _is_admission(claim, f, v.suspect, v.own_secrets, v.exposed):
@@ -161,7 +180,7 @@ def _judge(claim: Claim, v: _View) -> ClaimCheck:
         if claim.states(lie.claim):
             return _judge_lie(claim, lie, v)
 
-    return ClaimCheck(claim, Verdict.BLOCK_UNPLANNED, None, _unplanned_reason(claim, v))
+    return ClaimCheck(claim, Verdict.BLOCK_UNPLANNED, None, _block_reason(claim, v))
 
 
 def _judge_lie(claim: Claim, lie: PlannedLie, v: _View) -> ClaimCheck:
@@ -174,11 +193,11 @@ def _judge_lie(claim: Claim, lie: PlannedLie, v: _View) -> ClaimCheck:
         return block("you already admitted the truth this lie hides")
     for source, earlier in v.record:
         if source != lie.id and contradicts(earlier, lie.claim):
-            return block(f"contradicts what you already said ({source})")
+            return block("this contradicts what you already said")
     return ClaimCheck(claim, Verdict.PLANNED_LIE, lie.id, "your planned lie")
 
 
-def _unplanned_reason(claim: Claim, v: _View) -> str:
+def _block_reason(claim: Claim, v: _View) -> str:
     if claim.unspecified:
         return "name the exact time or leave the claim out"
     if any(claim.states(f) and f.id in v.own_secrets for f in v.facts):
