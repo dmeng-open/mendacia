@@ -14,7 +14,7 @@ MODEL_NAME = re.compile(
 def _scanned_files() -> list[Path]:
     files = [
         p
-        for d in ("app", "migrations", "tests")
+        for d in ("agents", "app", "engine", "migrations", "tests")
         for p in (BACKEND / d).rglob("*.py")
         if ".venv" not in p.parts and "fixtures" not in p.parts
     ]

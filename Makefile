@@ -29,7 +29,7 @@ lint:
 	cd backend && uv run ruff check . && uv run ruff format --check .
 
 typecheck:
-	cd backend && uv run mypy app engine migrations tests
+	cd backend && uv run mypy agents app engine migrations tests
 
 ci: lint typecheck test
 
