@@ -12,8 +12,8 @@ A case is the single input to the solver, the verifier, the suspect agents, and 
 
 `backend/engine/schema.py` holds frozen Pydantic models that forbid unknown keys.
 
-- **Ids.** Every id matches `^[a-z][a-z0-9_]*$`. The compiler writes ids as clingo constants, and clingo constants must start with a lowercase letter.
-- **`Statement`.** A `(subject, predicate, object, time_slot)` triple. `predicate` is the closed literal `at`, `has`, `saw`, `owes`, `heard`, so an unknown predicate fails validation. `at`, `saw`, and `heard` need a `time_slot`, and `has` and `owes` take none. `subject` is always a person. The object of `at` is a location, the object of `has` is an item, and the object of `saw`, `owes`, and `heard` is a person.
+- **Ids.** Every id matches `^[a-z][a-z0-9_]*$`. The compiler writes ids as clingo constants, and clingo constants must start with a lowercase letter. `not` is rejected, because it is a clingo keyword.
+- **`Statement`.** A `(subject, predicate, object, time_slot)` triple. `predicate` is the closed literal `at`, `has`, `saw`, `owes`, `heard`, so an unknown predicate fails validation. `at`, `saw`, and `heard` need a `time_slot`, and `has` and `owes` take none. `subject` is always a person. The object of `at` is a location, the object of `has` is an item, and the object of `saw`, `owes`, and `heard` is a person other than the subject.
 - **`Fact`.** A `Statement` with an `id` and `known_by`, the people who know it. `saw(A, B, T)` has no location field. It means A and B were in the same place at slot T, so the solver places B wherever A is.
 - **`PlannedLie`.** `suspect`, `hides_fact`, `claim`, and `says`. `claim` is a `Statement`, so the verifier in P2-1 matches an extracted claim against it field by field. `says` is the line the suspect agent starts from. `hides_fact` must be one of that suspect's `secrets`.
 - **`Clue`.** `kind` is `testimony` or `evidence`. `reveals` lists one or more fact ids. An evidence clue needs a `doc_id`, and a testimony clue takes none.
@@ -21,7 +21,7 @@ A case is the single input to the solver, the verifier, the suspect agents, and 
 - **`Crime`.** `location`, `time_slot`, and `means`. The compiler reads the scene here instead of searching the facts.
 - **`Case`.** `victim` and `suspects` are separate, because the victim can never be the culprit. `locations` and `items` map ids to display names. `time_slots` lists slot labels, and slot numbers start at 1. `secrets` maps a suspect to the facts that suspect hides. `solution_chain` lists the clue ids that together prove the culprit.
 
-One `model_validator` on `Case` collects every dangling reference and raises `DanglingReferences` with one line per problem, in the form `<json path>: unknown <kind> '<id>'`. It covers `known_by`, `secrets` keys and values, `planned_lies.suspect`, `planned_lies.hides_fact`, the lie's `claim`, `clues.reveals`, `clues.doc_id`, `solution_chain`, `culprit`, fact subjects and objects, `crime`, time slots, and duplicate ids. The validator reports every problem at once, so one renamed suspect lists every path that still points at the old id.
+One `model_validator` on `Case` collects every dangling reference and raises `DanglingReferences` with one line per problem, in the form `<json path>: unknown <kind> '<id>'`. It covers `known_by`, `secrets` keys and values, `planned_lies.suspect`, `planned_lies.hides_fact`, the lie's `claim`, `clues.reveals`, `clues.doc_id`, `solution_chain`, `culprit`, fact subjects and objects, `crime`, time slots, and duplicate ids and `solution_chain` entries. The validator reports every problem at once, so one renamed suspect lists every path that still points at the old id.
 
 ## Consequences
 

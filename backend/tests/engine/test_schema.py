@@ -141,3 +141,26 @@ def test_cli_lists_every_path_of_a_renamed_suspect(
 def test_cli_prints_ok_per_case(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["validate", *map(str, CASE_PATHS)]) == 0
     assert capsys.readouterr().out.splitlines() == [f"OK {p}" for p in CASE_PATHS]
+
+
+def test_clingo_keyword_id_fails() -> None:
+    data = manor()
+    data["locations"]["not"] = data["locations"].pop("ballroom")
+    with pytest.raises(ValidationError, match="'not' is a clingo keyword"):
+        Case.model_validate(data)
+
+
+def test_person_cannot_see_themselves() -> None:
+    data = manor()
+    data["facts"][3]["object"] = data["facts"][3]["subject"]
+    with pytest.raises(ValidationError, match="'saw' needs two different people"):
+        Case.model_validate(data)
+
+
+def test_duplicate_chain_entry_fails() -> None:
+    data = manor()
+    data["solution_chain"].append(data["solution_chain"][0])
+    with pytest.raises(
+        ValidationError, match="duplicate solution_chain id 'pike_kitchen_testimony'"
+    ):
+        Case.model_validate(data)

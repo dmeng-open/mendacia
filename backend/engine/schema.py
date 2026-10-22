@@ -1,9 +1,25 @@
 from collections.abc import Iterable
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 
-Id = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]*$")]
+CLINGO_KEYWORDS = frozenset({"not"})
+
+
+def _not_a_keyword(value: str) -> str:
+    if value in CLINGO_KEYWORDS:
+        raise ValueError(f"'{value}' is a clingo keyword")
+    return value
+
+
+Id = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]*$"), AfterValidator(_not_a_keyword)]
 Predicate = Literal["at", "has", "saw", "owes", "heard"]
 ClueKind = Literal["testimony", "evidence"]
 
@@ -33,6 +49,8 @@ class Statement(_Model):
             raise ValueError(f"'{self.predicate}' needs a time_slot")
         if not timed and self.time_slot is not None:
             raise ValueError(f"'{self.predicate}' takes no time_slot")
+        if self.predicate in {"saw", "owes", "heard"} and self.subject == self.object:
+            raise ValueError(f"'{self.predicate}' needs two different people")
         return self
 
 
@@ -147,6 +165,7 @@ def _reference_problems(case: Case) -> list[str]:
         ("planned lie", [lie.id for lie in case.planned_lies]),
         ("clue", [c.id for c in case.clues]),
         ("document", [d.id for d in case.documents]),
+        ("solution_chain", list(case.solution_chain)),
     ):
         problems += [f"duplicate {kind} id '{i}'" for i in sorted(set(ids)) if ids.count(i) > 1]
 
