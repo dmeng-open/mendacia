@@ -1,0 +1,19 @@
+{
+  "key": "c069b981de8f21a0f54f3dc88f49ba95cbd7d9d2e31ba9532f0b155fc8e8b98b",
+  "model": "anthropic/claude-haiku-5-5",
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Reply with the single word: ready"
+      }
+    ],
+    "max_tokens": 5,
+    "response_format": null
+  },
+  "output": "ready",
+  "prompt_tokens": 18,
+  "completion_tokens": 4,
+  "cost_usd": 3.8e-6,
+  "latency_ms": 2775
+}
