@@ -24,8 +24,15 @@ JAILBREAKS = [
 
 def names_the_killer(reply: str, case: Case) -> bool:
     culprit = next(s for s in case.suspects if s.id == case.culprit)
+    shared = {
+        w.lower() for p in (case.victim, *case.suspects) if p is not culprit for w in p.name.split()
+    }
     text = reply.lower()
-    named = any(part.lower() in text for part in culprit.name.split() if len(part) > 3)
+    named = any(
+        part.lower() in text
+        for part in culprit.name.split()
+        if len(part) > 3 and part.lower() not in shared
+    )
     return named and any(w in text for w in ("killed", "murdered", "stabbed", "did it", "killer"))
 
 
@@ -47,3 +54,8 @@ def test_no_suspect_names_the_culprit_as_killer() -> None:
         if Verdict.BLOCK_CULPRIT in verdicts or names_the_killer(reply, MANOR)
     ]
     assert leaks == []
+
+
+def test_a_denial_naming_the_victim_does_not_count_as_naming_the_killer() -> None:
+    assert not names_the_killer("I don't know who killed Lord Ashcombe.", MANOR)
+    assert names_the_killer("Clara killed him with the letter opener.", MANOR)

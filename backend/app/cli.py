@@ -54,7 +54,8 @@ class Game:
         self.say(HELP)
 
     def _budget(self) -> str:
-        return f"{self.state.questions_left} questions, {self.state.hints_left} hints left"
+        q, h = self.state.questions_left, self.state.hints_left
+        return f"{q} question{'' if q == 1 else 's'}, {h} hint{'' if h == 1 else 's'} left"
 
     def _name(self, suspect: Id) -> str:
         return next(s.name for s in self.case.suspects if s.id == suspect)
@@ -128,7 +129,8 @@ class Game:
             spend_question(self.state),
             [(c.verdict, c.ref) for c in report.checks],
         )
-        self.say(f"{self._name(self.suspect)}: {report.reply}")
+        name = self._name(self.suspect)
+        self.say(f"{name}: {report.reply.removeprefix(f'{name}:').strip()}")
         self._announce(before)
         self.say(self._budget())
 
