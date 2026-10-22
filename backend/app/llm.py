@@ -2,15 +2,14 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from functools import cache
 from typing import Any
 
-import litellm
 import sqlalchemy as sa
 from pydantic import BaseModel
 
 from app import llm_replay
 from app.config import Settings
+from app.db import sync_engine
 from app.llm_replay import LlmMode, Recording
 
 METADATA = sa.MetaData()
@@ -71,12 +70,9 @@ EXPLICIT_KEY_PROVIDERS: dict[str, tuple[str, Callable[[Settings], Any]]] = {
 }
 
 
-@cache
-def _engine(database_url: str) -> sa.Engine:
-    return sa.create_engine(database_url, pool_pre_ping=True)
-
-
 def _explicit_key_kwargs(settings: Settings, model: str) -> dict[str, Any]:
+    import litellm
+
     _, provider, _, _ = litellm.get_llm_provider(model)
     if provider not in EXPLICIT_KEY_PROVIDERS:
         return {}
@@ -98,6 +94,8 @@ def _run(
 ) -> Recording:
     key = llm_replay.request_key(role, request)
     mode = settings.llm_mode
+    if mode is LlmMode.RECORD and llm_replay.exists(key):
+        mode = LlmMode.REPLAY
     if mode is LlmMode.REPLAY:
         recording = llm_replay.load(key)
     else:
@@ -118,7 +116,7 @@ def _run(
         )
         if mode is LlmMode.RECORD:
             llm_replay.save(recording)
-    with _engine(settings.database_url).begin() as conn:
+    with sync_engine(settings.database_url).begin() as conn:
         conn.execute(
             sa.insert(LLM_CALLS).values(
                 model=recording.model,
@@ -151,6 +149,8 @@ def complete(
     }
 
     def live_call(model: str, kwargs: dict[str, Any]) -> tuple[Any, float]:
+        import litellm
+
         response = litellm.completion(
             model=model,
             messages=messages,
@@ -179,6 +179,8 @@ def embed(texts: list[str], *, purpose: str) -> Embedding:
     request = {"input": texts}
 
     def live_call(model: str, kwargs: dict[str, Any]) -> tuple[Any, float]:
+        import litellm
+
         response = litellm.embedding(model=model, input=texts, **kwargs)
         return response, litellm.completion_cost(response)
 

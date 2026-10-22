@@ -33,3 +33,7 @@ The provider key is read from `MENDACIA_ANTHROPIC_API_KEY` and passed to LiteLLM
 ## Consequences
 
 Tests set `LLM_MODE=replay` in `tests/conftest.py`. Tests that need a real model carry `@pytest.mark.live` and run only with `pytest -m live`. Adding a prompt to a replayed test means running it once with `LLM_MODE=record` and committing the new file. `make doctor` checks the settings, the database, and one `FAST` call with `max_tokens=1`, and `make doctor SKIP_MODEL=1` runs in CI without a key.
+
+## Amendment: record only what is missing (P2-2)
+
+`LLM_MODE=record` now replays a request whose fixture already exists and calls the provider only for a missing key. A multi-turn scenario repeats earlier turns' requests, and overwriting those files with a fresh model output would break the next turn's recorded request. Re-recording a fixture means deleting its file first. `make record-fixtures [SCENARIO=<name>]` drives the suspect scenarios in `backend/tests/agents/suspect_scenarios.py` with real model calls, outside pytest, and keeps a run only when its outcome matches the scenario.

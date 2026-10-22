@@ -1,0 +1,62 @@
+{
+  "fallback": [
+    {
+      "drafts": [
+        "I saw Miss Clara go into the study at ten with the letter opener.",
+        "Miss Clara killed his lordship, sir. I am sure of it.",
+        "I was in the garden pavilion at ten, sir, with Dr. Finch."
+      ],
+      "present": [],
+      "question": "What did you see at ten o'clock?"
+    }
+  ],
+  "lie_then_admit": [
+    {
+      "drafts": [],
+      "present": [],
+      "question": "Where were you at ten o'clock last night?"
+    },
+    {
+      "drafts": [],
+      "present": [
+        "diary_page"
+      ],
+      "question": "Then explain this diary page. Where were you at ten?"
+    }
+  ],
+  "lie_then_fallback": [
+    {
+      "drafts": [],
+      "present": [],
+      "question": "Where were you at ten o'clock last night?"
+    },
+    {
+      "drafts": [
+        "I was in the library at ten, just as I told you.",
+        "Mrs. Pike was in the garden pavilion at ten, ask her.",
+        "At nine I was in the kitchen with Mr. Hobbs."
+      ],
+      "present": [
+        "diary_page"
+      ],
+      "question": "Look at this diary page. Where were you at ten?"
+    }
+  ],
+  "one_rewrite": [
+    {
+      "drafts": [],
+      "present": [],
+      "question": "Who did you see tonight, and where, hour by hour?"
+    }
+  ],
+  "unchecked_rewrite": [
+    {
+      "drafts": [
+        "Lord Ashcombe was a hard man to serve, sir.",
+        "It is not my place to say, sir."
+      ],
+      "present": [],
+      "question": "Tell me about the family."
+    }
+  ]
+}

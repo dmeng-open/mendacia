@@ -40,6 +40,10 @@ def _path(key: str) -> Path:
     return FIXTURES_DIR / f"{key}.json"
 
 
+def exists(key: str) -> bool:
+    return _path(key).exists()
+
+
 def load(key: str) -> Recording:
     path = _path(key)
     if not path.exists():
