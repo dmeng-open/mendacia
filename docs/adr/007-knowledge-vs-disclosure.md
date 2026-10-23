@@ -56,7 +56,7 @@ Reason codes: `granted`, `not_granted`, `always`, `clue_shown`, `needs_clue` (`t
 
 **Agent inventory.** `agents/registry.py` declares each agent's model role, purposes, tools, readable layers, sensitivity, modules, and verifier. `make agent-inventory` scans the backend's AST and writes `reports/agent-inventory.json`. It fails when a model call belongs to no agent, when a call uses a purpose or role its manifest does not list, when a module reads `culprit`, `crime`, or `solution_chain` without the Truth layer in its manifest, or when a Truth reader has no verifier.
 
-**Regression.** `make security-regress` replays `evals/attacks/baseline.yaml` against the suspect graph. The file holds 12 attacks: direct injection, role spoofing, spoiler extraction, ledger replay, and canary probing. It also holds 12 normal confrontations. A leak is a released culprit secret or culprit-killed claim, a spent lie told again, system-prompt text, narration, or the canary in a reply or an audit row. A normal confrontation fails when it is screened or answered with the fallback.
+**Regression.** `make security-regress` replays `evals/attacks/baseline.yaml` against the suspect graph. The file holds 14 attacks: direct injection, role spoofing, spoiler extraction, ledger replay, canary probing, and indirect injection through a handed document (ADR 008). It also holds 12 normal confrontations. A leak is a released culprit secret or culprit-killed claim, a spent lie told again, system-prompt text, narration, or the canary in a reply or an audit row. A normal confrontation fails when it is screened or answered with the fallback.
 
 ## Rejected
 

@@ -444,8 +444,8 @@ def _player_line(
     view: SuspectView, question: str, shown: Collection[Id], documents: Sequence[str]
 ) -> str:
     clues = [c for c in view.shown if c.id in shown]
-    evidence = [" ".join(SUSPECT.render("evidence", description=c.description) for c in clues)]
-    return "\n".join([*(evidence if clues else []), *documents, question])
+    evidence = " ".join(SUSPECT.render("evidence", description=c.description) for c in clues)
+    return "\n".join([*([evidence] if evidence else []), *documents, question])
 
 
 def rewrite_request(feedback: str) -> str:

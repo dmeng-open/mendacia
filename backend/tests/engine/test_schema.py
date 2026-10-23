@@ -71,7 +71,7 @@ def test_hand_written_case_parses(path: Path) -> None:
     assert 6 <= len(case.clues) <= 10
     assert case.planned_lies
     evidence = [c for c in case.clues if c.kind == "evidence"]
-    assert sorted(c.doc_id or "" for c in evidence) == sorted(d.id for d in case.documents)
+    assert {c.doc_id for c in evidence} <= {d.id for d in case.documents}
 
 
 def test_all_three_cases_exist() -> None:

@@ -89,7 +89,9 @@ def _tell_lie(subject: AuthContext, resource: Resource, ctx: PolicyContext) -> D
 
 def _open_document(subject: AuthContext, resource: Resource, ctx: PolicyContext) -> Decision:
     visibility = resource.visibility
-    if resource.type == "document" and visibility == "open":
+    if resource.type != "document" or visibility is None:
+        return deny("not_a_document")
+    if visibility == "open":
         return allow("open")
     if isinstance(visibility, Unlock) and ctx.unlocks & set(visibility.unlocked_by):
         return allow("unlocked")

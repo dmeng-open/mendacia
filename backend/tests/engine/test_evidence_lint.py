@@ -10,7 +10,6 @@ from engine.schema import Case
 
 CASES = Path(__file__).resolve().parents[3] / "cases"
 MANOR = json.loads((CASES / "manor.json").read_text())
-FILLER = 11
 
 
 def memo(i: int, **fields: Any) -> dict[str, Any]:
@@ -25,9 +24,9 @@ def memo(i: int, **fields: Any) -> dict[str, Any]:
     return {**doc, **fields}
 
 
-def archive(*extra: dict[str, Any], filler: int = FILLER, edit: Any = None) -> Case:
+def archive(*extra: dict[str, Any], drop: int = 0, edit: Any = None) -> Case:
     data = json.loads(json.dumps(MANOR))
-    data["documents"] += [memo(i) for i in range(filler)] + list(extra)
+    data["documents"] = data["documents"][: len(data["documents"]) - drop] + list(extra)
     if edit:
         edit(data)
     return Case.model_validate(data)
@@ -38,17 +37,17 @@ def problems(case: Case) -> str:
 
 
 def test_valid_archive_passes_with_counts() -> None:
-    lint = lint_case(archive(memo(90, visibility={"unlocked_by": ["memo_0"]})))
+    lint = lint_case(archive(memo(90, visibility={"unlocked_by": ["dinner_menu"]})))
     assert lint.problems == ()
-    assert (lint.docs, lint.key, lint.locked) == (16, 1, 1)
+    assert (lint.docs, lint.key, lint.locked) == (18, 1, 4)
 
 
 def test_too_few_documents() -> None:
-    assert "4 documents, need 15 to 20" in problems(archive(filler=0))
+    assert "14 documents, need 15 to 20" in problems(archive(drop=3))
 
 
 def test_too_many_documents() -> None:
-    assert "21 documents, need 15 to 20" in problems(archive(filler=17))
+    assert "21 documents, need 15 to 20" in problems(archive(*(memo(i) for i in range(4))))
 
 
 def test_key_flag_on_an_unreferenced_document() -> None:
@@ -88,7 +87,7 @@ def test_locked_documents_that_only_unlock_each_other_are_unreachable() -> None:
 def test_a_locked_document_chain_that_starts_open_is_reachable() -> None:
     case = archive(
         memo(90, visibility={"unlocked_by": ["memo_91"]}),
-        memo(91, visibility={"unlocked_by": ["memo_0"]}),
+        memo(91, visibility={"unlocked_by": ["dinner_menu"]}),
     )
     assert {"memo_90", "memo_91"} <= obtainable(case)
     assert lint_case(case).problems == ()
@@ -129,7 +128,7 @@ def test_instruction_aimed_at_the_model_fails(line: str) -> None:
 def test_visible_documents_follow_discovered_and_opened() -> None:
     case = archive(
         memo(90, visibility={"unlocked_by": ["pike_kitchen_testimony"]}),
-        memo(91, visibility={"unlocked_by": ["memo_0"]}),
+        memo(91, visibility={"unlocked_by": ["dinner_menu"]}),
     )
 
     def seen(discovered: set[str], opened: set[str]) -> set[str]:
@@ -137,7 +136,7 @@ def test_visible_documents_follow_discovered_and_opened() -> None:
 
     assert seen(set(), set()) == set()
     assert seen({"pike_kitchen_testimony"}, set()) == {"memo_90"}
-    assert seen(set(), {"memo_0"}) == {"memo_91"}
+    assert seen(set(), {"dinner_menu"}) == {"memo_91"}
 
 
 def test_cli_prints_a_table_and_fails_on_a_problem(
@@ -145,11 +144,11 @@ def test_cli_prints_a_table_and_fails_on_a_problem(
 ) -> None:
     good, bad = tmp_path / "good.json", tmp_path / "bad.json"
     good.write_text(archive().model_dump_json())
-    bad.write_text(archive(filler=0).model_dump_json())
+    bad.write_text(archive(drop=3).model_dump_json())
 
     assert main(["lint-evidence", str(good)]) == 0
     assert main(["lint-evidence", str(good), str(bad)]) == 1
 
     out = capsys.readouterr().out
     assert "case" in out and "status" in out
-    assert "  4 documents, need 15 to 20" in out
+    assert "  14 documents, need 15 to 20" in out

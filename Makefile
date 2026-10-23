@@ -31,7 +31,7 @@ lint:
 typecheck:
 	cd backend && uv run mypy agents app engine evals migrations security tests
 
-ci: lint typecheck scan-instructions agent-inventory test security-regress
+ci: lint typecheck scan-instructions agent-inventory lint-evidence test security-regress
 
 agent-inventory:
 	cd backend && uv run python -m agents.inventory
