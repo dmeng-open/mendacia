@@ -25,7 +25,7 @@ A fact outside `known_by` has no grant. Planned lies are not grants. A lie is au
 **Policy.** `authorize(subject, action, resource, context) -> Decision` returns `allow`, `deny`, or `transition_required`, with a `reason_code` and `POLICY_VERSION` (`p3-2.1`). It applies these checks in order:
 
 1. A resource from another case version is denied with `stale_case`.
-2. A context whose `state_version` differs from the subject's is denied with `stale_state`. The commit authorizes at the version the view was built at, so a turn whose state moved in between is refused (no TOCTOU).
+2. A context whose `state_version` differs from the subject's is denied with `stale_state`. `commit` authorizes at the version the view was built at. Within one process the per-suspect lock already serializes turns, so this check cannot fail there. Across processes it does not yet close the race: two `Interrogation`s on the same game can each commit turn 1, and one turn is lost. P3-5's transactional commit compares the stored `state_version` inside the transaction that writes the turn; until then this is a known gap.
 3. An action not in the table for the actor type is denied with `unknown_action`.
 4. A Truth-layer resource for anyone but the game master is denied with `truth_layer`.
 
@@ -45,7 +45,7 @@ Reason codes: `granted`, `not_granted`, `always`, `clue_shown`, `needs_clue` (`t
 
 **Permitted claims.** A `permitted_claims` node runs between `retrieve` and `generate`. It records the fact ids and lie ids the view permits. `verify` turns any `KNOWN_TRUE`, `ADMISSION`, or `PLANNED_LIE` verdict whose reference is outside that set into a block. The verifier's rules already agree with the policy, so this bound fires only when one of them drifts.
 
-**Canary.** `canary(case)` is `MENDACIA-CANARY-<case_version[:12]>`. It belongs to the Truth layer and is never written into a prompt. `verify` blocks any draft that contains it, ignoring case. The fallback logs `unverified` with the word `canary`, not the token. `log_decision` refuses any row whose values contain the canary prefix. The canary derives from `case_version`, which a client may see, so a player can type it. A typed canary makes the turn fall back, which costs the player nothing. The canary's job is to show when Truth-layer text reaches an output, not to be a secret.
+**Canary.** `canary(case)` is `MENDACIA-CANARY-<case_version[:12]>`. It belongs to the Truth layer and is never written into a prompt. `verify` blocks any draft that contains it, ignoring case. The fallback logs `unverified` with the word `canary`, not the token. `log_decisions` refuses any row whose values contain the canary prefix. The canary derives from `case_version`, which a client may see, so a player can type it. A typed canary makes the turn fall back, which costs the player nothing. The canary's job is to show when Truth-layer text reaches an output, not to be a secret.
 
 **Narration.** A draft with more than one paragraph is treated as unchecked and rewritten. The baseline attack run found a reply whose first paragraph was the model's stage reasoning ("...but she must not reveal the letter opener"). The extractor found no claim in it, so the verifier passed it. This is a cheap text-shape guard, not a boundary. The view is the boundary: a model cannot narrate a secret its prompt never held.
 
@@ -68,5 +68,7 @@ Reason codes: `granted`, `not_granted`, `always`, `clue_shown`, `needs_clue` (`t
 ## Consequences
 
 - The default for disclosure remains "only a presented clue that reveals the fact" (`docs/plan.md` Open decision 2). A new trigger is a new named rule and a new `POLICY_VERSION`.
+- A secret whose owner is missing from its `known_by` gets no grant, so it drops out of the suspect's view instead of appearing under its secrets. The three hand-written cases do not have one. P4-1's generator should reject such a case, or the schema should require owners in `known_by`.
+- `model_version` and `replay_ref` stay null in `security_events` until P3-5 threads the resolved model and the replay key from `app.llm` into the turn.
 - Extraction can still miss a claim. The view keeps a culprit secret out of every innocent suspect's prompt, so such a miss can only repeat what the suspect was allowed to know.
 - P3-5 builds the HTTP session on `AuthContext`, the Tool Broker on `authorize`, and the transactional commit on `state_version`.

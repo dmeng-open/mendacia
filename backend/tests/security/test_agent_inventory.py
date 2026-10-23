@@ -1,5 +1,7 @@
 from dataclasses import replace
 
+import pytest
+
 from agents.inventory import problems, scan_module, sources
 from agents.registry import AGENTS
 
@@ -43,3 +45,33 @@ def test_call_through_to_thread_resolves_its_role_constant() -> None:
         "async def f(m):\n    await asyncio.to_thread(complete, ROLE, m, purpose='suspect')\n",
     ).calls
     assert (site.role, site.purpose) == ("fast", "suspect")
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "from app.llm import ModelRole, complete as ask\nask(ModelRole.STRONG, m, purpose='x')\n",
+        "from app.llm import ModelRole, complete\n"
+        "loop.run_in_executor(None, complete, ModelRole.STRONG, m)\n",
+    ],
+)
+def test_aliased_and_executor_calls_are_call_sites(source: str) -> None:
+    assert problems([scan_module("agents.rogue", source)]) == [
+        "agents.rogue:2: model call belongs to no agent"
+    ]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import litellm\nlitellm.completion(model='x', messages=[])\n",
+        "from pydantic_ai import Agent\nAgent('provider:any-model')\n",
+    ],
+)
+def test_calling_a_provider_outside_the_wrapper_fails(source: str) -> None:
+    found = problems([scan_module("agents.extract", source)])
+    assert any("calls a model outside app.llm" in p for p in found)
+
+
+def test_getattr_on_a_truth_field_reads_the_truth_layer() -> None:
+    assert scan_module("m", "def f(case):\n    return getattr(case, 'culprit')\n").reads_truth

@@ -259,6 +259,8 @@ async def commit(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, objec
         "history": (*state.history, exchange),
         "presented": state.shown,
         "audit": (),
+        "view": None,
+        "permitted": None,
     }
 
 

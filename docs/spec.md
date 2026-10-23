@@ -121,7 +121,7 @@ authorize(subject, action, resource, context) -> Decision
 
 - Deny by default. An unknown action, tool, or resource type is denied with a reason code.
 - Roles set the base scope (player, suspect, game master, eval worker, detective bot). Attributes narrow it (case, phase, unlocks, ownership).
-- An authorization and the commit it guards use the same `state_version`. If the version changed in between, the action is denied (no TOCTOU).
+- An authorization and the commit it guards use the same `state_version`. If the version changed in between, the action is denied (no TOCTOU). P3-2 checks this inside one process; the cross-process check lands with the transactional commit in P3-5.
 - Vector and full-text hits are filtered in SQL by case, version, and visibility, then each hit is checked again with `authorize` (P3-4).
 - `security.policy.authorize` holds the table in code, with `POLICY_VERSION`; ADR 007 copies it, and a test fails when they disagree. P3-2 covers the suspect and game-master rows; P3-4 and P3-5 add the player, search, and tool rows.
 
@@ -160,7 +160,7 @@ The scan reads Truth-layer access as any use of `culprit`, `crime`, or `solution
 
 ### 6.6 Audit (built, P3-2)
 
-`security_events` has these columns: `trace_id`, `game_id`, `turn_id`, `actor_type`, `action`, `resource_type`, `policy_version`, `decision`, `reason_code`, `latency_ms`, `model_version`, `prompt_version`, `case_version`, `state_version`, `replay_ref`, and `decision_trace`. `decision_trace` is a JSON list of steps (auth, identity, policy, tool, verify, commit), each with its outcome and ms. Rows never hold Truth text, a full prompt, or a player's raw message. Reproduction goes through `replay_ref`. Each suspect turn records a `retrieve` row with policy decision counts by reason code, one `verify` row per draft, and a `commit_turn` row, written in one transaction at commit. `security.events.log_decision` refuses a row that contains the canary.
+`security_events` has these columns: `trace_id`, `game_id`, `turn_id`, `actor_type`, `action`, `resource_type`, `policy_version`, `decision`, `reason_code`, `latency_ms`, `model_version`, `prompt_version`, `case_version`, `state_version`, `replay_ref`, and `decision_trace`. `decision_trace` is a JSON list of steps (auth, identity, policy, tool, verify, commit), each with its outcome and ms. Rows never hold Truth text, a full prompt, or a player's raw message. Reproduction goes through `replay_ref`. Each suspect turn records a `retrieve` row with policy decision counts by reason code, one `verify` row per draft, and a `commit_turn` row, written in one transaction at commit. `security.events.log_decisions` refuses a row that contains the canary. `model_version` and `replay_ref` are filled from P3-5.
 
 ### 6.7 Supply chain of agent instructions (P3-1)
 

@@ -13,6 +13,7 @@ SCANNED = ("agents", "app", "engine", "evals", "security")
 LLM_ENTRY = frozenset({"complete", "embed", "CompleteModel"})
 TRUTH_ATTRS = frozenset({"culprit", "crime", "solution_chain"})
 TABLES = frozenset({"llm_calls", "verifier_events", "security_events"})
+PROVIDERS = frozenset({"litellm", "openai", "anthropic"})
 
 
 @dataclass(frozen=True)
@@ -29,6 +30,7 @@ class ModuleUse:
     calls: tuple[CallSite, ...]
     reads_truth: bool
     tables: frozenset[str]
+    bypasses: tuple[int, ...] = ()
 
 
 def sources(root: Path = BACKEND) -> list[tuple[str, str]]:
@@ -67,7 +69,15 @@ def scan_module(module: str, source: str) -> ModuleUse:
         for t in stmt.targets
         if isinstance(t, ast.Name)
     }
+    entries = set(LLM_ENTRY) | {
+        a.asname
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        for a in node.names
+        if a.name in LLM_ENTRY and a.asname
+    }
     calls: list[CallSite] = []
+    bypasses: list[int] = []
     truth = False
     tables: set[str] = set()
     for node in ast.walk(tree):
@@ -75,22 +85,45 @@ def scan_module(module: str, source: str) -> ModuleUse:
             truth = True
         if isinstance(node, ast.Constant) and node.value in TABLES:
             tables.add(str(node.value))
+        if isinstance(node, ast.Import | ast.ImportFrom) and _imports_provider(node):
+            bypasses.append(node.lineno)
         if not isinstance(node, ast.Call):
             continue
         args = list(node.args)
-        if _name(node.func) in LLM_ENTRY:
+        if _name(node.func) == "getattr" and len(args) > 1:
+            attr = args[1]
+            truth |= isinstance(attr, ast.Constant) and attr.value in TRUTH_ATTRS
+        if _name(node.func) == "Agent" and not _wraps_complete_model(node):
+            bypasses.append(node.lineno)
+        if _name(node.func) in entries:
             role_arg = args[0] if args else None
-        elif args and _name(args[0]) in LLM_ENTRY:
-            role_arg = args[1] if len(args) > 1 else None
         else:
-            continue
+            at = next((i for i, a in enumerate(args) if _name(a) in entries), None)
+            if at is None:
+                continue
+            role_arg = args[at + 1] if len(args) > at + 1 else None
         keywords = {k.arg: k.value for k in node.keywords if k.arg}
         role_arg = keywords.get("role", role_arg)
         purpose = keywords.get("purpose")
         text = purpose.value if isinstance(purpose, ast.Constant) else None
         text = text if isinstance(text, str) else None
         calls.append(CallSite(module, node.lineno, _role(role_arg, constants), text))
-    return ModuleUse(module, tuple(calls), truth, frozenset(tables))
+    return ModuleUse(module, tuple(calls), truth, frozenset(tables), tuple(bypasses))
+
+
+def _imports_provider(node: ast.Import | ast.ImportFrom) -> bool:
+    if isinstance(node, ast.ImportFrom):
+        return (node.module or "").split(".")[0] in PROVIDERS
+    return any(a.name.split(".")[0] in PROVIDERS for a in node.names)
+
+
+def _wraps_complete_model(node: ast.Call) -> bool:
+    model = (
+        node.args[0]
+        if node.args
+        else next((k.value for k in node.keywords if k.arg == "model"), None)
+    )
+    return isinstance(model, ast.Call) and _name(model.func) == "CompleteModel"
 
 
 def owner(module: str, agents: Sequence[AgentManifest]) -> AgentManifest | None:
@@ -102,6 +135,7 @@ def problems(uses: Iterable[ModuleUse], agents: Sequence[AgentManifest] = AGENTS
     for use in uses:
         if use.module in LLM_ADAPTERS:
             continue
+        out += [f"{use.module}:{line}: calls a model outside app.llm" for line in use.bypasses]
         agent = owner(use.module, agents)
         if agent is None:
             out += [f"{c.module}:{c.line}: model call belongs to no agent" for c in use.calls]
