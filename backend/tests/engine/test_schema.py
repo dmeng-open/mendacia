@@ -50,6 +50,11 @@ REFERENCE_CASES: list[tuple[str, Mutation, str]] = [
     ),
     ("clue reveals", _set(["clues", 2, "reveals", 0], "ghost"), "clues[2].reveals[0]"),
     ("clue doc_id", _set(["clues", 3, "doc_id"], "ghost"), "clues[3].doc_id"),
+    (
+        "document unlock",
+        _set(["documents", 1, "visibility"], {"unlocked_by": ["ghost"]}),
+        "documents[1].visibility.unlocked_by[0]",
+    ),
     ("solution chain", _set(["solution_chain", 1], "ghost"), "solution_chain[1]"),
     ("culprit", _set(["culprit"], "ghost"), "culprit"),
     ("fact subject", _set(["facts", 4, "subject"], "ghost"), "facts[4].subject"),
@@ -84,6 +89,20 @@ def test_dangling_reference_names_path_and_id(mutate: Mutation, path: str) -> No
         Case.model_validate(data)
     assert f"{path}: unknown" in str(error.value)
     assert "'ghost'" in str(error.value)
+
+
+def test_a_document_cannot_unlock_itself() -> None:
+    data = manor()
+    data["documents"][1]["visibility"] = {"unlocked_by": [data["documents"][1]["id"]]}
+    with pytest.raises(ValidationError, match=r"documents\[1\].visibility.unlocked_by\[0\]"):
+        Case.model_validate(data)
+
+
+def test_a_document_can_be_unlocked_by_a_clue_or_a_document() -> None:
+    data = manor()
+    data["documents"][1]["visibility"] = {"unlocked_by": ["pike_kitchen_testimony"]}
+    data["documents"][2]["visibility"] = {"unlocked_by": [data["documents"][0]["id"]]}
+    Case.model_validate(data)
 
 
 def test_unknown_predicate_fails() -> None:

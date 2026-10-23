@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from engine.schema import Case
+from engine.schema import Case, Unlock, Visibility
 from security.context import ActorType, AuthContext, case_version
 from security.grants import AfterClue, Always, KnowledgeGrant, NeverBeforeReveal, grants_for
 from security.policy import POLICY, Action, Decision, PolicyContext, Resource, authorize
@@ -108,3 +108,30 @@ def test_adr_007_lists_every_policy_row() -> None:
     adr = (REPO / "docs" / "adr" / "007-knowledge-vs-disclosure.md").read_text()
     for (actor, action), (condition, _) in POLICY.items():
         assert f"| `{actor}` | `{action}` | {condition} |" in adr
+
+
+@pytest.mark.parametrize(
+    ("visibility", "unlocks", "effect", "reason"),
+    [
+        ("open", frozenset(), "allow", "open"),
+        (Unlock(unlocked_by=("diary_page",)), frozenset(), "deny", "locked"),
+        (
+            Unlock(unlocked_by=("diary_page", "opener_case")),
+            frozenset({"opener_case"}),
+            "allow",
+            "unlocked",
+        ),
+        (Unlock(unlocked_by=("diary_page",)), frozenset({"debt_ledger"}), "deny", "locked"),
+    ],
+)
+def test_open_document(
+    visibility: Visibility, unlocks: frozenset[str], effect: str, reason: str
+) -> None:
+    r = Resource("document", "ashcombe_ledger", VERSION, "player", visibility=visibility)
+    decision = decide(who("p1", "player"), "open_document", r, unlocks=unlocks)
+    assert (decision.effect, decision.reason_code) == (effect, reason)
+
+
+def test_suspect_cannot_open_a_document() -> None:
+    r = Resource("document", "ashcombe_ledger", VERSION, "player", visibility="open")
+    assert decide(who("hobbs"), "open_document", r).reason_code == "unknown_action"

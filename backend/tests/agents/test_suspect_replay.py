@@ -110,6 +110,14 @@ def test_every_state_type_is_registered_with_the_serializer() -> None:
     assert SuspectState.model_validate(SERDE.loads_typed(SERDE.dumps_typed(state))) == state
 
 
+def test_unknown_document_is_refused_before_the_turn() -> None:
+    async def body(room: Interrogation) -> None:
+        with pytest.raises(ValueError, match="unknown documents"):
+            await room.ask("clara", "What is this?", documents=["no_such_doc"])
+
+    run(body)
+
+
 def test_unknown_clue_is_refused_before_the_turn_and_leaves_the_thread_usable() -> None:
     first, _ = chosen("lie_then_admit")
 

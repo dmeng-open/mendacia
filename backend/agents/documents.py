@@ -3,7 +3,7 @@ import unicodedata
 
 from engine.schema import EvidenceDoc
 
-_DELIMITER = re.compile(r"<(?=/?\s*document)", re.IGNORECASE)
+_DELIMITER = re.compile(r"<(?=\s*/?\s*document)", re.IGNORECASE)
 
 
 def quote_document(doc: EvidenceDoc) -> str:
