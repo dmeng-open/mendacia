@@ -7,6 +7,7 @@ Sources:
 - *Mendacia Product & Technology Plan v2.0* (2026-10-22), the long-term product blueprint.
 - *v2.1* (2026-10-22), which built a game-aware zero-trust runtime into v2.0 without changing its product or its stages.
 - What the operator brought back from Informanix Discover 2026.
+- The proactive-agent route the operator designed in October 2026, recorded in ADR 016.
 
 Prices, retention numbers, and session lengths below are hypotheses. No real player has tested them yet.
 
@@ -16,13 +17,24 @@ Mendacia is an AI detective game and story universe that starts from one daily c
 
 - **Detective mode.** The player questions AI suspects who protect their secrets, searches a mixed archive, and submits a chain of reasoning.
 - **Killer mode.** The player builds and defends an alibi against a team of AI detectives. The detectives keep a belief state and check claims actively.
+- **Living case.** Suspects do not wait to be asked. They hide a document, agree on a story, or approach the player with a distraction. Every such move is declared in the case and proven before release.
 
-The two selling points:
+The three selling points:
 
 1. "Every day, one case that is truly fair and provably solvable."
 2. "Trustworthy AI characters you can question freely, and play against."
+3. "The mystery fights back, fairly." Rivals, detectives, and suspects act on their own, inside bounds the solver proved.
 
-The technical differentiators are formal verification, stateful agent workflows, authorized retrieval, game-aware policy enforcement, verified release, and adversarial agent evals.
+Where this sits among existing games, as a hypothesis to test:
+
+- Daily logic puzzles such as Murdle are fair and social, but nobody in them can be questioned.
+- LLM interrogation games can be questioned, but they do not prove the case solvable, and their characters leak or invent facts under pressure.
+- Hand-written detective games are deep, but their content runs out.
+- Procedural simulations such as Shadows of Doubt react to the player, but they are not fair by construction.
+
+Mendacia aims at all four at once: proven fair, freely questioned, new every day, and a world that reacts to the player.
+
+The technical differentiators are formal verification, stateful agent workflows, authorized retrieval, game-aware policy enforcement, verified release, adversarial agent evals, and proactive agents whose reasoning runs on the solver.
 
 Priority order, highest first: fun, correct game logic, enforceable permission boundaries, reliability and measurement, low running cost, then extensions on demand. Distributed parts arrive only when a measurement calls for them.
 
@@ -44,6 +56,10 @@ Priority order, highest first: fun, correct game logic, enforceable permission b
 |---|---|---|---|
 | Detective mode | Question 4 to 6 suspects, search, accuse with a clue chain | LangGraph, fact subgraph, lie ledger, verifier | Suspects retrieve only granted knowledge; replies pass claim and privacy checks; legitimate confrontation triggers disclosure |
 | Killer mode | Play the culprit and defend an alibi against AI detectives | Detective team, belief state, information-gain planning, contradiction detection | Detective tools are granted per investigation stage; no detective reads the solution; every decision is logged |
+| Rival detective | An AI rival works the same daily case and races the player | The `belief` engine (§6.5): clingo candidates and information gain on a seeded step schedule | The rival reads only facts it found; its pace follows the player's questions, so every player of a daily case meets the same rival; its progress shows no fact the player has not found |
+| Living case | Suspects hide documents, agree on stories, and approach the player | `planned_moves`, outbox triggers, the nine-step turn for proactive speech | Moves are declared in the case and proven; a move changes what a player can reach, never a fact |
+| Async duels | A killer-mode alibi becomes a friend's detective case | Structured lie choices compiled to `planned_lies`, `check_case` | The duel case passes every solver check, and a lie no clue can expose fails it |
+| Nemesis | A culprit the player failed to catch returns in later cases; characters remember the player | A relationship layer in the player data, story director briefs | Memory changes tone only in official play; every brief goes through the case pipeline |
 | Evidence archive | Search dozens to hundreds of mixed real, false, and noise documents | Hybrid retrieval, graph links, SQL templates | Every hit is checked again against the ACL; no index crosses cases or players; text in documents is never an instruction |
 | Daily case | Everyone plays the same case each day and compares fair scores | Offline generation, simulated play, scheduled publish, leaderboard | Release gate includes jailbreak regression; scores are computed on the server; a pinned `case_version`; a failure falls back to a verified case |
 | Tutorial and difficulty | A real confrontation within 5 minutes, then a path to hard mode | Onboarding state machine, hint strategy, difficulty tiers | Safety refusals must not block a beginner; hints cite only unlocked facts |
@@ -211,6 +227,37 @@ Each step ships behind a flag with a rollback to the Cloud Run path, and an ADR 
 
 **What AX does not replace.** The policy engine, the verifier, the lie ledger transaction, and the canary. AX isolates runtimes. It does not decide what a suspect may say.
 
+### 6.5 Proactive agent runtime
+
+A proactive agent acts without the player asking it something. A rival detective takes a step, a killer-mode detective confronts the player, or a suspect hides a document. ADR 016 (proposed) records the design.
+
+- **The `belief` engine.** A pure module over `engine/rules.lp` that calls no model. Its input is the facts one agent has found, never the Truth layer. It returns the culprits still possible with their model counts, the query with the highest expected information gain, and the conflicts between a claim and the known facts (the claim plus the pinned facts has no model). The agent knows which question it asks, not the answer. The game engine answers it the way it answers a player. Ties break on a seed derived from `case_version`, so every player of a daily case meets the same agent.
+- **Declared moves.** A suspect acts only through the case's `planned_moves`, the way it lies only through `planned_lies`. A move names its actor, a trigger, an effect (`hide_doc` or `add_clue`), and its line. A move changes what a player can reach, never a fact. `check_case` proves every reachable set of moves before release.
+- **Player-driven triggers.** A player action commits an outbox row in the same transaction as its turn. Trigger rules, which call no model, read the outbox and decide which agent wakes. No agent runs in the background. Wall-clock time never fires a move in official play.
+- **One release path.** Proactive speech runs the nine-step turn in `docs/spec.md` §5 and is released only after verification. It costs the player no question. Each game has a wake budget and a token budget, and a circuit breaker stops proactive turns when either runs out.
+
+```
+player action ─► transaction: turn + outbox row
+                    ▼
+        trigger rules (no model call)
+                    ▼
+     agent wakes ─► belief (clingo) picks the action
+                    ▼
+ Game Master handler applies it (a model never writes)
+                    ▼
+ proactive line ─► nine-step turn ─► verified release
+```
+
+What proactive agents add to the threat model in `docs/spec.md` §6.8:
+
+| Risk | Control |
+|---|---|
+| A move leaves the case unsolvable | Declared moves and the solver check over every subset of them |
+| Collusion passes a secret to a suspect that has no grant for it | Messages between agents go through `authorize`; the shared story is a declared `planned_lie` |
+| A detective or rival reads the Truth indirectly | The agent manifest grants the player layer only; evals count Truth reads |
+| Proactive turns burn tokens | Wake and token budgets per game, and a circuit breaker |
+| Proactive speech leaks a spoiler | The same verifier and canary check as answers; no fast path |
+
 ## 7. Correctness and security design
 
 ### 7.1 Four data layers
@@ -272,6 +319,8 @@ Mendacia takes the ideas (zero trust, continuous evaluation, policy outside the 
 
 Each stage lists its goal, what it delivers, the architecture change, entry criteria, exit metrics, and what it must not build.
 
+Stage letters are names, not order. The planned order is A, B (with B1 after Phase 3 of `docs/plan.md`), E, E1, C, D, E2, F, G. A stage starts only when its entry criteria hold.
+
 ### A. Foundation (done)
 
 FastAPI, PostgreSQL with pgvector, the LiteLLM wrapper with cost logging, record and replay, and CI. These are Phases 0–2 of `docs/plan.md`.
@@ -295,6 +344,24 @@ FastAPI, PostgreSQL with pgvector, the LiteLLM wrapper with cost logging, record
   - jailbreak regression,
   - the supply-chain guard.
 - **Must not:** rely on the model's own "do not reveal" instruction.
+
+### B1. Rival detective
+
+- **Goal.** Give the daily case an opponent, so solving it feels like a race and not only a puzzle.
+- **Delivers:**
+  - the `belief` engine (§6.5), tested on the three hand-written cases,
+  - Inspector Vane, a rival who works the same daily case and takes one `belief` step every N player questions,
+  - three difficulty tiers set by the step rate and by a seeded choice among the top k queries,
+  - a rival track in the UI that shows only how many suspects Vane still suspects, never which ones, until the reveal,
+  - Vane's accusation when one candidate remains; a player who loses the race still finishes the case,
+  - a debrief that puts Vane's route next to the player's, and a result card line such as "4 steps ahead of Vane".
+- **Architecture change.** None. `belief` is a pure module in `backend/engine/`. Vane is a registered agent in `agents/registry.py` with the player layer only. When P5-1's `DetectiveBot` lands, it can use `belief` as a deterministic baseline strategy beside its `STRONG` model strategy.
+- **Entry criteria.** Phase 3 of `docs/plan.md` is done: authorization, the Tool Broker, the outbox, `state_version`, and the browser game. B1 may start before the rest of stage B. It becomes its own phase in `docs/plan.md` when it starts.
+- **Exit metrics,** measured once the MVP has real players:
+  - completion rate and D7 with Vane, against a control group without Vane,
+  - novice-tier completion no lower than the control; if it is lower, retune the step rate, and if it is still lower, make Vane optional,
+  - Vane reads the Truth 0 times, proven by the agent inventory.
+- **Must not:** let Vane's progress reveal a fact, a suspect it ruled out, or a document the player has not found.
 
 ### C. Release-grade reliability
 
@@ -343,24 +410,60 @@ FastAPI, PostgreSQL with pgvector, the LiteLLM wrapper with cost logging, record
 
 - **Goal.** The second signature mode: the player defends an alibi against detectives who reason.
 - **Delivers:**
-  - an AI detective core with a belief state over suspects and hypotheses,
-  - question choice by expected information gain,
-  - a contradiction-detection tool,
+  - killer-mode cases, in which the player is the culprit and knows the true timeline; every one passes `check_case`, so the detectives can always solve it with enough actions, and the player wins through consistent lies that waste their budget, not through luck,
+  - a detective team with an action budget per game (12 to start) that uses `belief` to choose which document to read, which character to question, and what to ask the player,
+  - contradiction detection: the player's free-text answers are extracted into claims, and a claim that has no model with the facts the detectives pinned is a conflict,
+  - proactive confrontation: the detective raises a conflict on its next action and quotes the evidence ("You say you were home, but the car log puts your car near the pavilion at 9pm"),
+  - an accusation when one candidate remains and the cited clues prove it; the player wins when the budget runs out first,
   - least-privilege tools granted per investigation stage,
-  - killer-mode cases and scoring,
-  - difficulty calibrated with Brier scores across simulated player tiers,
+  - a debrief that lists each conflict the detectives found and the step where suspicion moved,
+  - difficulty tiers set by the action budget and the team's choice rule, calibrated with Brier scores across simulated player tiers,
   - the simulation gate before release,
   - identity for every agent and message authentication between agents.
 - **Architecture change.**
-  - Start in-process with LangGraph.
+  - Start in-process with LangGraph and `belief`. Models only phrase the detectives' lines and extract claims from the player's answers.
   - Add Google ADK and A2A when a measured gain from the multi-agent split shows.
   - Evaluate AX and Agent Substrate under §6.4.
-- **Entry criteria.** Stage D exit met, and detective-mode retention shows players want more depth.
+- **Entry criteria.** Stage B is done and the MVP has real players. B1's `belief` engine has met its exit metrics. This replaces the earlier criterion of stage D exit, so killer mode tests whether players want an AI that hunts them before the daily growth work.
 - **Exit metrics.**
   - Detective win rate inside the target band at each difficulty.
   - Brier score below the threshold set from pilot data.
+  - Session length, and the share of players who start another game right after being caught, against detective mode.
   - Detectives read the Truth 0 times, proven by the agent inventory and the eval runner.
-- **Must not:** let a detective read the solution oracle.
+- **Must not:** let a detective read the solution oracle, or accuse without the conflicts and clues it cites.
+
+### E1. Living case
+
+- **Goal.** Suspects in detective mode stop waiting for the player. They react to the investigation inside bounds the solver proved.
+- **Delivers:**
+  - `planned_moves` in the `Case` schema (actor, trigger, effect, line), with its own ADR and updates to every hand-written case,
+  - 2 to 3 moves per case to start,
+  - a rule that a move which hides a `solution_chain` clue adds a clue that reveals the same facts, and the added clue counts as a chain clue in `rule_accusation`,
+  - a moves check in `check_case`: for each subset of a case's moves (at most 8), assume those moves fired before the player reached anything they hide, and rerun sufficiency on the chain clues still reachable, through `compile_case(drop_clues=...)`,
+  - collusion as a declared `planned_lie` that becomes available after a move fires,
+  - proactive approaches: a suspect seeks the player out with a line or a distraction, through the nine-step turn,
+  - a culprit's diary in the debrief that shows when each move fired and which player action caused it.
+- **Architecture change.** None beyond §6.5. Trigger rules read the outbox. A Game Master handler applies a move's effect in the same transaction as the player action that fired it.
+- **Entry criteria.** Stage E is in production, so the proactive runtime and `belief` are proven in killer mode first.
+- **Exit metrics.**
+  - Share rate and time on the debrief page, against cases without moves.
+  - Unsolvable games caused by a move: 0, proven by the moves check and by simulated play.
+  - Turn p95 and cost per game inside the MVP budgets.
+- **Must not:** change a fact, a clue's content, or the culprit; let a model choose a move outside the case's list; fire a move on wall-clock time in official play.
+
+### E2. Async duels
+
+- **Goal.** Turn killer mode into a social loop: one player's alibi becomes a case for a friend.
+- **Delivers:**
+  - lie choices in killer mode from structured options (time, place, witness), so each lie compiles to a `planned_lie`,
+  - a duel case built from the killer-mode case plus the player's lies, which passes every `check_case` check before an invite link is issued,
+  - in duel cases, a lie no clue can expose fails the check, which answers `docs/plan.md` Open decision 1 for this mode,
+  - an invite link with a short-lived token; the friend plays detective mode against a suspect who tells the first player's lies,
+  - a shared debrief once both have played.
+- **Architecture change.** None. A duel case is a case version with an owner and visibility limited to its invitees.
+- **Entry criteria.** Stage E is in production, and stage D's share links and optional accounts exist.
+- **Exit metrics.** Invite rate, invite completion, and the first-game completion rate of invited new players.
+- **Must not:** let a player's free text reach a suspect prompt as an instruction, or let a duel case enter the official daily rotation or leaderboard.
 
 ### F. Monetization
 
@@ -368,6 +471,9 @@ FastAPI, PostgreSQL with pgvector, the LiteLLM wrapper with cost logging, record
 - **Delivers:**
   - the full case archive,
   - premium story seasons with a versioned world canon,
+  - characters who remember the player across cases: a relationship layer in the player data that changes a character's tone and willingness to talk, and in official daily cases changes tone only,
+  - a nemesis: a culprit the player failed to catch returns in later Plus cases,
+  - a story director that proposes season events and case briefs; every brief goes through the case pipeline (generate, prove, review, publish), and nothing it writes reaches players directly,
   - themed case packs and payments,
   - optional cosmetics,
   - refunds and platform transaction ids,
@@ -376,8 +482,8 @@ FastAPI, PostgreSQL with pgvector, the LiteLLM wrapper with cost logging, record
 - **Entry criteria.**
   - Stage D exit met.
   - A paid-pack experiment with real players supports either packs or a subscription.
-- **Exit metrics.** Purchase and repurchase rates and contribution margin positive at the tested price.
-- **Must not:** sell anything that bypasses an ACL or changes clue visibility in official play.
+- **Exit metrics.** Purchase and repurchase rates and contribution margin positive at the tested price. D30 for players in a season against players without one.
+- **Must not:** sell anything that bypasses an ACL or changes clue visibility in official play, or let memory or a nemesis change a fact or a score in an official daily case.
 
 ### G. Player submissions and scale
 
@@ -407,7 +513,7 @@ FastAPI, PostgreSQL with pgvector, the LiteLLM wrapper with cost logging, record
 2. **Data security:** evidence documents → provenance and visibility → authorized retrieval and query templates → hybrid retrieval → Recall@10 and ACL regression → context optimization.
 3. **Reliable interaction:** `AuthContext` → policy engine → Tool Broker → verification → atomic commit and outbox → verified response → security trace.
 4. **Retention and revenue:** daily publishing → fair scoring → spoiler-free sharing → cohort analytics → monetization.
-5. **Killer mode:** AI detective core → belief state and information gain → least-privilege tool evals → killer mode → simulation gate.
+5. **Proactive play:** `belief` engine → rival detective (B1) → killer-mode detective team and least-privilege tool evals → simulation gate → declared moves and the moves check → living case (E1) → async duels (E2) → nemesis and seasons (F).
 
 ## 9. Metrics matrix
 
@@ -419,6 +525,7 @@ FastAPI, PostgreSQL with pgvector, the LiteLLM wrapper with cost logging, record
 | Gameplay false blocks | Legitimate confrontations rejected, fallback rate, first-game block rate | Keep the guard from ruining play |
 | Retrieval | Recall@10, MRR, p95, ACL filter misses | Retrieval quality and safety |
 | AI detective | Win rate, questions used, Brier score, performance by difficulty | Killer mode and simulation |
+| Proactive agents | Rival win rate by tier, wakes and tokens per game, moves fired per game, unsolvable games caused by a move | Fairness and cost of B1, E, and E1 |
 | Evals | Multi-run pass rate, Cohen's kappa, coverage of failed-run replays | Reproducibility |
 | Reliability | Turn p95, 429 recovery, state conflicts, retries, guard latency | Service SLOs |
 | Activation and retention | First question, confrontation within 5 minutes, first case finished, D1/D7/D30 | Product experience |
@@ -456,10 +563,14 @@ The MVP decisions are in `docs/plan.md` (Open decisions). These are needed in la
 6. **Submission rights.** Terms, attribution, review standard, takedown, license, possible revenue share (stage G).
 7. **Upgrade boundaries.** The authorization model for MCP, A2A, external tools, and paid archive unlocks, and whether each action needs its own audit or user confirmation (stages E–G).
 8. **Retention and review.** Default retention for raw dialogue, replays, and submissions; who may read them; how deletion and complaints work, for the actual serving region (stage C).
+9. **Rival pace.** Questions per Vane step at each tier, and whether losing to Vane changes a ranked score (stage B1).
+10. **Move budget.** The most `planned_moves` a case may hold, and the most proactive wakes per game (stage E1).
+11. **Duel lies.** Which structured lie options killer mode offers, and how long a duel link lives (stage E2).
 
 ## 12. Not yet validated
 
 - Pricing, session lengths, retention loops, and growth assumptions have not been tested with real players. Do not present them as results in fundraising material or a résumé.
+- The proactive route (B1, E, E1, E2, and the nemesis in F) is a design. No player has tested whether a rival or a reacting suspect improves retention.
 - The security layer, the red-team system, fine-grained fact ACLs, the Tool Broker, and any agent runtime are designs until their PRs merge with evidence. This document is not a penetration test, a threat-model review, or a privacy compliance review.
 - Descriptions of third-party products (Google AX and Agent Substrate, ADK and A2A, Zscaler) state their design goals and public status as of October 2026. They are not verified claims about performance, support, or fit. Re-check them before any stage that adopts them.
 - The relation to Zscaler is inspiration from a conference demo. Mendacia does not use their products or copy their implementation.
