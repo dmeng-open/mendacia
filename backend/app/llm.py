@@ -68,6 +68,7 @@ MODELS: dict[ModelRole, Callable[[Settings], str]] = {
 
 EXPLICIT_KEY_PROVIDERS: dict[str, tuple[str, Callable[[Settings], Any]]] = {
     "anthropic": ("MENDACIA_ANTHROPIC_API_KEY", lambda s: s.anthropic_api_key),
+    "openai": ("MENDACIA_OPENAI_API_KEY", lambda s: s.openai_api_key),
 }
 
 
