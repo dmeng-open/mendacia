@@ -22,6 +22,7 @@ DEFAULT_GLOBS = (
     "scripts/*.sh",
     "cases/*.json",
     ".github/workflows/*.yml",
+    "backend/agents/prompts/*.txt",
 )
 
 _FETCH = r"(curl|wget)\b"

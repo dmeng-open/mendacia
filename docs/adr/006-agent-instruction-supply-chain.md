@@ -14,7 +14,7 @@ The RedWraith demo at Informanix Discover 2026 showed the attack this answers. A
 
 ## Decision
 
-`scripts/scan_instructions.py` reads the instruction set and reports one line per finding with file, line, and rule. It exits 1 on any finding. It uses only the standard library, so it runs before `uv sync`. With no arguments it reads `CLAUDE.md`, `AGENTS.md`, `.claude/**`, `docs/*.md`, `docs/adr/*.md`, `scripts/*.sh`, `cases/*.json`, and `.github/workflows/*.yml`. That set adds the roadmap and the ADRs to the list in `docs/plan.md`, because `CLAUDE.md` points agents at both.
+`scripts/scan_instructions.py` reads the instruction set and reports one line per finding with file, line, and rule. It exits 1 on any finding. It uses only the standard library, so it runs before `uv sync`. With no arguments it reads `CLAUDE.md`, `AGENTS.md`, `.claude/**`, `docs/*.md`, `docs/adr/*.md`, `scripts/*.sh`, `cases/*.json`, `.github/workflows/*.yml`, and the prompt templates in `backend/agents/prompts/*.txt`, which feed every model call. That set adds the roadmap and the ADRs to the list in `docs/plan.md`, because `CLAUDE.md` points agents at both.
 
 The rules:
 
