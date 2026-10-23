@@ -133,3 +133,30 @@ def test_live_and_record_without_key_raise(
     monkeypatch.setenv("LLM_MODE", mode)
     with pytest.raises(MissingApiKey, match="MENDACIA_ANTHROPIC_API_KEY is not set"):
         complete(ModelRole.FAST, READY, purpose=uuid4().hex)
+
+
+def test_openai_embed_without_key_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(llm_replay, "FIXTURES_DIR", tmp_path)
+    monkeypatch.setattr("litellm.embedding", fail)
+    monkeypatch.setenv("MODEL_EMBED", "openai/test-embed")
+    monkeypatch.delenv("MENDACIA_OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("LLM_MODE", "live")
+    with pytest.raises(MissingApiKey, match="MENDACIA_OPENAI_API_KEY is not set"):
+        embed([uuid4().hex], purpose=uuid4().hex)
+
+
+def test_openai_embed_passes_its_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    seen: dict[str, Any] = {}
+
+    def fake_embedding(**kwargs: Any) -> SimpleNamespace:
+        seen.update(kwargs)
+        return SimpleNamespace(data=[{"embedding": [1.0]}], usage=SimpleNamespace(prompt_tokens=1))
+
+    monkeypatch.setattr(llm_replay, "FIXTURES_DIR", tmp_path)
+    monkeypatch.setattr("litellm.embedding", fake_embedding)
+    monkeypatch.setattr("litellm.completion_cost", lambda _: 0.0)
+    monkeypatch.setenv("MODEL_EMBED", "openai/test-embed")
+    monkeypatch.setenv("MENDACIA_OPENAI_API_KEY", "openai-test-key")
+    monkeypatch.setenv("LLM_MODE", "live")
+    embed([uuid4().hex], purpose=uuid4().hex)
+    assert seen["api_key"] == "openai-test-key"

@@ -20,4 +20,7 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr | None = Field(
         default=None, validation_alias="MENDACIA_ANTHROPIC_API_KEY"
     )
+    openai_api_key: SecretStr | None = Field(
+        default=None, validation_alias="MENDACIA_OPENAI_API_KEY"
+    )
     llm_mode: LlmMode = Field(default=LlmMode.LIVE, validation_alias="LLM_MODE")
