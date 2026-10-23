@@ -194,6 +194,132 @@
       "body": "21:00. Lens turned and checked, mechanism sound. Inspection passed. Signed, H. Quill, harbour board.",
       "is_key": false,
       "visibility": "open"
+    },
+    {
+      "id": "tide_table",
+      "title": "Tide table for Gull Point",
+      "source": "tide_table",
+      "body": "Thursday. High water 21:58, height 5.1 metres. Low water 04:10. Spring tides; gale warning in force.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "storm_bulletin",
+      "title": "Coastguard storm bulletin",
+      "source": "weather_report",
+      "body": "Storm signal raised at 16:00. Wind north-west, rising to force 9 by evening. The causeway to Gull Point impassable from 18:00 until the morning ebb.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "cottage_lease",
+      "title": "Lease for the spare cottage",
+      "source": "lease",
+      "body": "Received of Miss A. Vos, rent for the spare cottage, May to September, eight pounds. No oils or turpentine to be stored near the lamp room stairs. A. Crane, keeper.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "ada_sketchbook",
+      "title": "Page from Ada Vos's sketchbook",
+      "source": "sketchbook",
+      "body": "Study of the point under storm cloud, grey on grey. The beam comes round every ten seconds and turns the rain to silver. Try again in oils if the weather holds.",
+      "is_key": false,
+      "visibility": {
+        "unlocked_by": ["ada_saw_nell_testimony"]
+      }
+    },
+    {
+      "id": "fish_receipt",
+      "title": "Fish sale receipt",
+      "source": "receipt",
+      "body": "Polwenna quay, Wednesday. Forty mackerel, two crab. Sold by N. Trask. Paid in full.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "stores_inventory",
+      "title": "Keeper's stores",
+      "source": "inventory",
+      "body": "Paraffin, forty gallons. Wicks, two dozen. Mantles, one box. Chimney glasses, six. Mineral oil for the clockwork, two tins.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "pawn_ticket",
+      "title": "Pawn ticket",
+      "source": "pawn_ticket",
+      "body": "Polwenna Loan Office. Pledged: one silver watch, engraved. Lent: fifteen shillings. Name: J. Penhale. Redeem within three months.",
+      "is_key": false,
+      "visibility": {
+        "unlocked_by": ["boathouse_ledger"]
+      }
+    },
+    {
+      "id": "gale_clipping",
+      "title": "Clipping from the Polwenna Gazette",
+      "source": "newspaper",
+      "body": "The fishing fleet stayed in harbour on Thursday as the worst gale of the year came ashore. The causeway road to Gull Point was closed by the coastguard.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "board_circular",
+      "title": "Harbour board circular",
+      "source": "circular",
+      "body": "To all keepers. From the first of the month, log entries are to be made in ink, with the hour in the twenty-four hour clock, and signed in full.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "ada_postcard",
+      "title": "Postcard from Ada Vos",
+      "source": "postcard",
+      "body": "Dear Bea, the keeper is a gruff old thing but feeds me fish. Painting the cliffs every day; the light here is wonderful. Home in September. Love, A.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "boathouse_notice",
+      "title": "Notice on the boathouse door",
+      "source": "notice",
+      "body": "No crates to be stored here without the keeper's mark. No lamps left lit. By order, A. Crane, keeper.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "constable_report",
+      "title": "Constable's report",
+      "source": "police_report",
+      "body": "Telephone line to the point down in the storm. Reached Gull Point by boat at first light. Keeper found dead in the lamp room, struck once on the head. Four persons sheltering at the point detained for questioning.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "board_acknowledgement",
+      "title": "Letter from the harbour board",
+      "source": "letter",
+      "body": "Dear Mr. Crane, the Board acknowledges your letter of the 3rd concerning the Gull Point light. An inspector will attend on Thursday.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "crane_complaint",
+      "title": "Keeper's letter to the harbour board",
+      "source": "letter",
+      "body": "Sirs, I must again report that the Gull Point light failed twice this winter, for near an hour each time. The inspection reports say otherwise. I ask the Board to send a second man to see for himself.",
+      "is_key": false,
+      "visibility": {
+        "unlocked_by": ["board_acknowledgement"]
+      }
+    },
+    {
+      "id": "chandlery_invoice",
+      "title": "Chandlery invoice",
+      "source": "invoice",
+      "body": "Polwenna Chandlery. To N. Trask: two coils manila rope, one tin Stockholm tar, a dozen shackles. Account overdue, kindly settle.",
+      "is_key": false,
+      "visibility": "open"
     }
   ],
   "solution_chain": ["nell_jetty_testimony", "ada_saw_nell_testimony", "boathouse_ledger"],
