@@ -31,3 +31,23 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
+
+  frontend:
+    image: node:24.21.0-bookworm-slim
+    working_dir: /app
+    environment:
+      API_TARGET: http://backend:8000
+    command: sh -c "npm ci && npx vite --host 0.0.0.0"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5173').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 3s
+      timeout: 3s
+      retries: 60

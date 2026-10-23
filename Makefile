@@ -2,7 +2,15 @@ ENV_FILE := $(if $(wildcard .env),.env,.env.example)
 ENV_NAMES := $(shell sed -n 's/^\([A-Z_]*\)=.*/\1/p' $(ENV_FILE))
 $(foreach v,$(ENV_NAMES),$(if $(filter environment,$(origin $(v))),,$(eval export $(v) := $(shell sed -n 's/^$(v)=//p' $(ENV_FILE)))))
 
-.PHONY: setup up db-create migrate api test lint typecheck ci doctor validate-cases check-case lint-evidence record-fixtures play-cli scan-instructions audit agent-inventory security-regress seed retrieval-eval record-retrieval
+.PHONY: setup up db-create migrate api test lint typecheck ci doctor validate-cases check-case lint-evidence record-fixtures play-cli scan-instructions audit agent-inventory security-regress seed retrieval-eval record-retrieval node-check web play api-types frontend-lint frontend-typecheck frontend-test e2e e2e-backend
+
+NODE_VERSION := $(shell cat frontend/.nvmrc)
+NODE_DIR ?= /opt/node-v$(NODE_VERSION)
+ifneq ($(wildcard $(NODE_DIR)/bin/node),)
+export PATH := $(NODE_DIR)/bin:$(PATH)
+endif
+E2E_DATABASE_URL ?= $(DATABASE_URL)_e2e
+PLAY_CASE = $(if $(CASE),$(basename $(notdir $(CASE))),manor)
 
 setup:
 	cd backend && uv sync --frozen
@@ -31,7 +39,7 @@ lint:
 typecheck:
 	cd backend && uv run mypy agents app engine evals evidence migrations security tests
 
-ci: lint typecheck scan-instructions agent-inventory lint-evidence test security-regress
+ci: lint typecheck scan-instructions agent-inventory lint-evidence test security-regress frontend-lint frontend-typecheck frontend-test e2e
 
 agent-inventory:
 	cd backend && uv run python -m agents.inventory
@@ -46,7 +54,7 @@ audit:
 	cd backend && uv export --frozen --no-emit-project --format requirements-txt > .audit-requirements.txt \
 		&& uv run pip-audit --strict --require-hashes --disable-pip -r .audit-requirements.txt; \
 		status=$$?; rm -f .audit-requirements.txt; exit $$status
-	if [ -f frontend/package-lock.json ]; then cd frontend && npm audit --omit=dev --audit-level=high; fi
+	cd frontend && npm audit --omit=dev --audit-level=high && npm audit signatures
 
 doctor:
 	cd backend && uv run python -m app.doctor $(if $(SKIP_MODEL),--skip-model)
@@ -74,3 +82,43 @@ retrieval-eval:
 
 record-retrieval:
 	$(MAKE) RECORD=1 seed retrieval-eval
+
+node-check:
+	@test "$$(node -v)" = "v$(NODE_VERSION)" || { echo "frontend/ needs Node $(NODE_VERSION) but found $$(node -v). Run scripts/install_pkgs.sh, or set NODE_DIR to a Node $(NODE_VERSION) install."; exit 1; }
+
+web: node-check
+	cd frontend && npx vite
+
+play:
+	@if ! curl -sf -o /dev/null localhost:$(API_PORT)/healthz; then \
+		echo "starting the backend on $(API_PORT), log in $${TMPDIR:-/tmp}/mendacia-api.log"; \
+		nohup $(MAKE) api > $${TMPDIR:-/tmp}/mendacia-api.log 2>&1 & \
+	fi; \
+	if ! curl -sf -o /dev/null localhost:$(WEB_PORT); then \
+		echo "starting the frontend on $(WEB_PORT), log in $${TMPDIR:-/tmp}/mendacia-web.log"; \
+		nohup $(MAKE) web > $${TMPDIR:-/tmp}/mendacia-web.log 2>&1 & \
+	fi; \
+	for _ in $$(seq 60); do curl -sf -o /dev/null localhost:$(WEB_PORT) && break; sleep 1; done; \
+	url="http://localhost:$(WEB_PORT)/?case=$(PLAY_CASE)"; echo "$$url"; \
+	(xdg-open "$$url" || open "$$url") > /dev/null 2>&1 || true
+
+api-types: node-check
+	cd backend && uv run python -c 'import json, sys; from app.main import app; json.dump(app.openapi(), sys.stdout)' > ../frontend/openapi.json
+	cd frontend && npx openapi-typescript openapi.json -o src/api-types.ts; status=$$?; rm -f openapi.json; exit $$status
+
+frontend-lint: node-check
+	cd frontend && npx eslint . && npx prettier --check .
+
+frontend-typecheck: node-check
+	cd frontend && npx tsc --noEmit
+
+frontend-test: node-check
+	cd frontend && npx vitest run
+
+e2e: node-check
+	cd frontend && npx playwright test
+
+e2e-backend:
+	DATABASE_URL=$(E2E_DATABASE_URL) $(MAKE) db-create migrate seed
+	cd backend && DATABASE_URL=$(E2E_DATABASE_URL) LLM_MODE=replay SESSION_SECRET=$(or $(SESSION_SECRET),e2e-session-secret) \
+		uv run uvicorn app.main:app --port $(API_PORT)
