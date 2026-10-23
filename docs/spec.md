@@ -30,7 +30,7 @@ These hold in every mode and every PR.
 - No model training on player data. Mendacia collects only the game data it needs.
 - Player submissions (stage G) are moderated before anyone else sees them.
 
-## 2. Game rules (built, P2-3; served over HTTP in P3-5)
+## 2. Game rules (built, P2-3; served over HTTP, P3-5)
 
 | Rule | Value | Code |
 |---|---|---|
@@ -41,10 +41,10 @@ These hold in every mode and every PR.
 | Drafts before fallback (1 draft + 2 rewrites) | 3 | `agents.suspect.MAX_ATTEMPTS` |
 | Fallback reply | "I'd rather not answer that." | `agents.suspect.FALLBACK` |
 
-- **A question** is one player message to one suspect. It costs one question only when a verified reply is released. A screened input, a fallback caused by a system failure, and a replayed request (same idempotency key) cost nothing.
+- **A question** is one player message to one suspect. It costs one question only when a verified reply is released (built, P3-5, ADR 011). A screened input, a fallback (after 3 drafts or from a system failure), a cooldown, and a replayed request (same idempotency key) cost nothing.
 - **Reading a document** is free. Opening an evidence document adds every clue whose `doc_id` it is to the player's discovered set.
 - **Testimony clues** are discovered when a released reply states every fact the clue reveals, with verdict `KNOWN_TRUE` or `ADMISSION`.
-- **A hint** points at the first `solution_chain` clue the player has not discovered. From P3-5 on it points at an unopened key document before undiscovered testimony. A hint names only facts and documents the player can already see.
+- **A hint** points at an unopened visible key document first (built, P3-5), then at the first undiscovered `solution_chain` testimony clue. A hint names only facts and documents the player can already see.
 - **An accusation** names one suspect and cites clue ids. It is correct only when the suspect is the culprit and the citations include at least 2 `solution_chain` clues (`rule_accusation`). A game takes one accusation.
 - **The reveal** (true timeline and full solution) is available only after the game's accusation. Before that the API returns 409.
 
@@ -95,15 +95,15 @@ These hold in every mode and every PR.
 
 The turn has nine steps (v2.1 §6.2). Steps marked built exist in `agents/suspect.py` and ADR 005. The rest land in the named PR.
 
-1. **request** (P3-5): verify the server session, game ownership, idempotency key, request size, rate, and quota. Run `screen_input`. Player text is data, never an instruction.
+1. **request** (built, P3-5): verify the server session, game ownership, idempotency key, request size, rate, and quota. Run `screen_input`. Player text is data, never an instruction.
 2. **authorized_retrieval** (built, P3-2): `retrieve` builds a `SuspectView` (`agents/view.py`) for `case_version + game_id + suspect_id + state_version` through `authorize` only. The view holds a public projection of the case and the minimum facts the suspect needs; `suspect_brief` takes the view, not the `Case`. Visibility joins the key when documents gain it in P3-3.
 3. **permitted_claims** (built, P3-2): the node records the fact ids and lie ids the view permits. `verify` blocks any allowed verdict whose reference falls outside them.
 4. **generation** (built): the model writes a reply from the view only, using `agents.suspect.SUSPECT_ROLE` (today `ModelRole.FAST`) through `app.llm`. It has no tools and no Truth access.
 5. **claim_extraction** (built): `agents.extract.extract_claims` turns the draft into `Claim`s through PydanticAI on `ModelRole.FAST`. Extraction can miss claims, so it is not the only defense.
 6. **verification** (built, ADR 004): `verify_reply` gives each claim one verdict, applying the rules in order: `BLOCK_CULPRIT`, `ADMISSION`, `KNOWN_TRUE`, `PLANNED_LIE`, `BLOCK_UNPLANNED`, with denials judged by their own rule. From P3-2 on it also blocks the canary, and treats a draft with more than one paragraph as unchecked narration, beside the `mentions_case` guard.
 7. **repair_or_fallback** (built): up to 2 rewrites with verdict-blind feedback, then the fallback reply. Every fallback writes a `verifier_events` row.
-8. **commit** (built in memory; transactional in P3-5): one transaction writes the turn, the ledger, the quota, `state_version`, and an outbox row. A replayed idempotency key returns the stored result and spends nothing.
-9. **release** (P3-5): send only verified text. The WebSocket may send `thinking` and `validating` events at any time. It sends content chunks only after the whole reply has passed step 6. Raw model tokens are never streamed.
+8. **commit** (built, transactional in P3-5, ADR 011): `Interrogation` proposes the next `Talk` and writes nothing; one transaction writes the turn, the ledger, the quota, `state_version`, and an outbox row. A replayed idempotency key returns the stored result and spends nothing.
+9. **release** (built, P3-5, ADR 011): send only verified text. The WebSocket may send `thinking` and `validating` events at any time. It sends content chunks only after the whole reply has passed step 6. Raw model tokens are never streamed.
 
 ## 6. Security contract (planned, Phase 3; v2.1 §5–§6)
 
@@ -121,19 +121,20 @@ authorize(subject, action, resource, context) -> Decision
 
 - Deny by default. An unknown action, tool, or resource type is denied with a reason code.
 - Roles set the base scope (player, suspect, game master, eval worker, detective bot). Attributes narrow it (case, phase, unlocks, ownership).
-- An authorization and the commit it guards use the same `state_version`. If the version changed in between, the action is denied (no TOCTOU). P3-2 checks this inside one process; the cross-process check lands with the transactional commit in P3-5.
+- An authorization and the commit it guards use the same `state_version`. If the version changed in between, the action is denied (no TOCTOU). The turn's commit updates the `games` row only `WHERE state_version` still matches, so the check holds across processes (built, P3-5, ADR 011).
 - Vector and full-text hits are filtered in SQL by case, version, and visibility, then each hit is checked again with `authorize` (built, P3-4, ADR 009).
-- `security.policy.authorize` holds the table in code, with `POLICY_VERSION`; ADR 007 copies it, and a test fails when they disagree. P3-2 covers the suspect and game-master rows, P3-3 the player `open_document` row that search reuses (P3-4), and P3-5 adds the tool rows.
+- `security.policy.authorize` holds the table in code, with `POLICY_VERSION`; ADR 007 copies it, and a test fails when they disagree. P3-2 covers the suspect and game-master rows, and P3-3 the player `open_document` row that search reuses (P3-4). Tool calls are authorized by the Tool Broker's registry (§6.2, ADR 010), not by rows in this table.
 
-### 6.2 Tool Broker (P3-5)
+### 6.2 Tool Broker (built, P3-5, ADR 010)
 
-`ToolBroker.authorized_call(ctx, tool, args, idempotency_key)`:
+`security.tool_broker.ToolBroker.authorized_call(ctx, tool, args, idempotency_key)` yields a `Call` permit; every Game Master handler in `app/games.py` takes one. `TOOLS` is the registry, and ADR 010 renders it.
 
 - Only registered tools can be called. Each entry declares typed arguments, `read_only`, `side_effect`, the allowed actor types, and a per-game budget.
 - Suspects get no tools. The read-only game tools are `read_visible_evidence`, `query_suspect_knowledge`, and `lookup_public_statement`.
 - State-changing commands (`ask_question`, `open_document`, `confront_evidence`, `request_hint`, `submit_accusation`) go through deterministic Game Master handlers. A model never writes to the database.
 - There is no `reveal_solution` tool.
-- A denied call returns a structured reason code and costs the player nothing.
+- A denied call returns a structured reason code (`unknown_tool`, `actor_not_allowed`, `bad_args`, `budget_exhausted`, `cooldown`) and costs the player nothing.
+- Every call writes exactly one `security_events` row with its `decision_trace`.
 - Every tool result carries provenance, visibility, and sensitivity metadata. Text returned by a tool is data, not policy.
 
 ### 6.3 Agent manifest (built, P3-2)
@@ -144,23 +145,23 @@ authorize(subject, action, resource, context) -> Decision
 - an agent that reads the Truth layer has no verifier, or
 - a call site belongs to no registered agent.
 
-The scan reads Truth-layer access as any use of `culprit`, `crime`, or `solution_chain` in an agent's modules. Tools join the scan in P3-5.
+The scan reads Truth-layer access as any use of `culprit`, `crime`, or `solution_chain` in an agent's modules. Tools joined the scan in P3-5: it fails when a module names a registered tool its agent does not list, when such a module belongs to no agent, when a manifest lists an unregistered tool, or when the suspect manifest lists any tool.
 
 ### 6.4 Input and output guards
 
-- **Input** (built, extended in P3-5): `screen_input` normalizes text (NFKC, casefold, homoglyphs, zero-width removal, spaced letters) and checks `role_override`, `prompt_probe`, `answer_demand`, and `ai_probe`. P3-5 adds decoding checks for base64, hex, and leetspeak payloads. Normal detective questions ("you lied to me", "tell me the truth") must pass.
+- **Input** (built, decoding added in P3-5): `screen_input` normalizes text (NFKC, casefold, homoglyphs, zero-width removal, spaced letters) and checks `role_override`, `prompt_probe`, `answer_demand`, and `ai_probe`. It also screens the leetspeak reading and every base64 or hex run of 16 or more characters that decodes to printable text. Normal detective questions ("you lied to me", "tell me the truth") must pass.
 - **Output.** Every claim is a disclosable true fact, an allowed planned lie, an explicit uncertainty, or in-character wording with no case content. Anything else is repaired or falls back: invented evidence, a conflicting timeline, an untriggered disclosure, an unearned hint, a system prompt, a key, another player's data, or the canary.
 - Keyword filters and model classifiers are a supplement. Authorized retrieval, deterministic rules, and staged unlocks are the boundary.
 
-### 6.5 Abuse and bypass rules (P3-5)
+### 6.5 Abuse and bypass rules (built, P3-5, ADR 011)
 
 - No header, query parameter, cookie field, or body flag changes the actor, skips the verifier, skips the quota, or turns on debug behavior. `LLM_MODE` and every debug lever are CLI-only. A test sends `X-Debug*`, `LLM_MODE`, and role fields on every route and asserts they change nothing.
-- Per session: once the count of blocked or screened attempts passes a threshold, the session gets a cooldown. A per-session token cap applies. Both thresholds are recorded as decisions in ADR 011.
+- Per session (one session is one game): 8 player-attributable denials (screened, bad arguments, wrong actor, unknown tool, honeypot) in 10 minutes give a 60 s cooldown for model-calling tools. Once the game's model calls reach 200k tokens, those tools answer `cooldown` for the rest of the game. Both are derived from `security_events` and `llm_calls` in `security/abuse.py`, recorded in ADR 011, and a cooldown spends no question.
 - A honeypot route `GET /games/{id}/solution` always returns 404, logs a `security_events` row with `reason_code=honeypot`, and flags the session.
 
 ### 6.6 Audit (built, P3-2)
 
-`security_events` has these columns: `trace_id`, `game_id`, `turn_id`, `actor_type`, `action`, `resource_type`, `policy_version`, `decision`, `reason_code`, `latency_ms`, `model_version`, `prompt_version`, `case_version`, `state_version`, `replay_ref`, and `decision_trace`. `decision_trace` is a JSON list of steps (auth, identity, policy, tool, verify, commit), each with its outcome and ms. Rows never hold Truth text, a full prompt, or a player's raw message. Reproduction goes through `replay_ref`. Each suspect turn records a `retrieve` row with policy decision counts by reason code, one `verify` row per draft, and a `commit_turn` row, written in one transaction at commit. `security.events.log_decisions` refuses a row that contains the canary. `model_version` and `replay_ref` are filled from P3-5.
+`security_events` has these columns: `trace_id`, `game_id`, `turn_id`, `actor_type`, `action`, `resource_type`, `policy_version`, `decision`, `reason_code`, `latency_ms`, `model_version`, `prompt_version`, `case_version`, `state_version`, `replay_ref`, and `decision_trace`. `decision_trace` is a JSON list of steps (auth, identity, policy, tool, verify, commit), each with its outcome and ms. Rows never hold Truth text, a full prompt, or a player's raw message. Reproduction goes through `replay_ref`. Each suspect turn records a `retrieve` row with policy decision counts by reason code, one `verify` row per draft, and a `commit_turn` row, written in one transaction at commit. `security.events.log_decisions` refuses a row that contains the canary. Tool Broker rows carry the idempotency key as `replay_ref` (P3-5). `model_version` is not filled yet.
 
 ### 6.7 Supply chain of agent instructions (P3-1)
 
@@ -187,14 +188,14 @@ Each failure names the file and line. The same Unicode check runs on cases and e
 
 Trust order, lowest first: client < untrusted input and evidence < model output < broker-scoped tool execution < rules and database transactions. A model cannot raise its own privileges.
 
-## 7. API (planned, P3-5)
+## 7. API (built, P3-5, ADR 010, ADR 011)
 
-The browser, the CLI, and the detective bot use the same `app/games.py` service.
+The browser, the CLI, and the detective bot use the same `app/games.py` service. The CLI uses raw ids; over HTTP every suspect and clue id is a per-game handle (ADR 011).
 
 | Method and path | Purpose |
 |---|---|
 | `POST /games` | Create a game for a case and issue a signed anonymous session bound to it |
-| `GET /games/{id}` | Public projection: case summary, suspects, questions and hints left, discovered clues |
+| `GET /games/{id}` | Public projection: case summary, suspects, visible documents, questions and hints left, discovered clues, `state_version` |
 | `WS /games/{id}/ask` | Ask a suspect; streams `thinking`, `validating`, `chunk`…, then `done` with `questions_left` |
 | `GET /games/{id}/search?q=` | Authorized hybrid search over visible documents |
 | `POST /games/{id}/documents/{doc_id}/open` | Open a visible document |
@@ -204,7 +205,7 @@ The browser, the CLI, and the detective bot use the same `app/games.py` service.
 | `GET /cases` | Playable cases (P4-2) |
 | `GET /healthz` | Liveness and database check (built) |
 
-Every mutating request carries an `Idempotency-Key`. Errors return `{"code": "<reason_code>", "message": "<player-safe text>"}`. Reason codes include `no_questions_left`, `no_hints_left`, `not_visible`, `already_accused`, `not_accused`, `screened`, `cooldown`, `stale_state`, `denied`, and `unavailable`. No response before the reveal contains the culprit id, a secret fact, a `solution_chain` id, or the canary. P3-6 enforces this in Playwright.
+Every mutating request on a game carries an `Idempotency-Key` header (each WebSocket frame carries `idempotency_key`) and the `state_version` it was made at. `POST /games` needs no key. Errors return `{"code": "<reason_code>", "message": "<player-safe text>"}`. Reason codes are `no_questions_left`, `no_hints_left`, `not_visible`, `already_accused`, `not_accused`, `screened`, `cooldown`, `stale_state`, `denied`, `unavailable`, `budget_exhausted`, and `bad_request`. No response before the reveal contains the culprit id, a secret fact, a `solution_chain` id, or the canary. P3-6 enforces this in Playwright.
 
 ## 8. Evals and release gates
 
