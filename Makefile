@@ -2,7 +2,7 @@ ENV_FILE := $(if $(wildcard .env),.env,.env.example)
 ENV_NAMES := $(shell sed -n 's/^\([A-Z_]*\)=.*/\1/p' $(ENV_FILE))
 $(foreach v,$(ENV_NAMES),$(if $(filter environment,$(origin $(v))),,$(eval export $(v) := $(shell sed -n 's/^$(v)=//p' $(ENV_FILE)))))
 
-.PHONY: setup up db-create migrate api test lint typecheck ci doctor validate-cases check-case record-fixtures play-cli
+.PHONY: setup up db-create migrate api test lint typecheck ci doctor validate-cases check-case record-fixtures play-cli scan-instructions audit
 
 setup:
 	cd backend && uv sync --frozen
@@ -31,7 +31,16 @@ lint:
 typecheck:
 	cd backend && uv run mypy agents app engine migrations tests
 
-ci: lint typecheck test
+ci: lint typecheck scan-instructions test
+
+scan-instructions:
+	python3 scripts/scan_instructions.py
+
+audit:
+	cd backend && uv export --frozen --no-emit-project --format requirements-txt > .audit-requirements.txt \
+		&& uv run pip-audit --strict --require-hashes --disable-pip -r .audit-requirements.txt; \
+		status=$$?; rm -f .audit-requirements.txt; exit $$status
+	if [ -f frontend/package-lock.json ]; then cd frontend && npm audit --omit=dev --audit-level=high; fi
 
 doctor:
 	cd backend && uv run python -m app.doctor $(if $(SKIP_MODEL),--skip-model)

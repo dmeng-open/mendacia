@@ -1,0 +1,4 @@
+# Hosts that instruction files may link to. One host per line; subdomains must be listed separately.
+localhost
+github.com
+code.claude.com

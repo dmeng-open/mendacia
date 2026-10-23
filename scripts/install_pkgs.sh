@@ -6,7 +6,7 @@ cd "$ROOT"
 
 export PATH="$HOME/.local/bin:$PATH"
 if ! command -v uv >/dev/null; then
-  pip install --quiet uv || curl -LsSf https://astral.sh/uv/install.sh | sh
+  pip install --quiet uv
 fi
 
 if ! command -v psql >/dev/null; then
