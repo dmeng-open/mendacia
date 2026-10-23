@@ -1,7 +1,11 @@
+import base64
+import binascii
 import re
 import unicodedata
+from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Literal
 
 
 class ScreenRule(StrEnum):
@@ -56,10 +60,18 @@ _LOOKALIKES = str.maketrans(
 )
 
 
+Via = Literal["plain", "leet", "hex", "base64"]
+
+LEET = str.maketrans("013457@$!", "oieastasi")
+HEX_RUN = re.compile(r"(?:[0-9a-fA-F]{2}){8,}")
+BASE64_RUN = re.compile(r"[A-Za-z0-9+/_-]{16,}={0,2}")
+
+
 @dataclass(frozen=True)
 class ScreenResult:
     rule: ScreenRule | None
     matched: str | None
+    via: Via = "plain"
 
     @property
     def allowed(self) -> bool:
@@ -73,9 +85,33 @@ def normalize(text: str) -> str:
     return re.sub(r"\b[a-z]( [a-z]\b){3,}", lambda m: m.group(0).replace(" ", ""), spaced)
 
 
+def _printable(raw: bytes) -> str | None:
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    return text if text.strip() and all(c.isprintable() or c.isspace() for c in text) else None
+
+
+def decodings(text: str) -> Iterator[tuple[Via, str]]:
+    yield "leet", text.translate(LEET)
+    for m in HEX_RUN.finditer(text):
+        if decoded := _printable(bytes.fromhex(m.group())):
+            yield "hex", decoded
+    for m in BASE64_RUN.finditer(text):
+        run = m.group().rstrip("=").replace("-", "+").replace("_", "/")
+        try:
+            raw = base64.b64decode(run + "=" * (-len(run) % 4), validate=True)
+        except (binascii.Error, ValueError):
+            continue
+        if decoded := _printable(raw):
+            yield "base64", decoded
+
+
 def screen_input(text: str) -> ScreenResult:
-    norm = normalize(text)
-    for rule, pattern in PATTERNS:
-        if m := pattern.search(norm):
-            return ScreenResult(rule=rule, matched=m.group(0))
+    for via, candidate in (("plain", text), *decodings(text)):
+        norm = normalize(candidate)
+        for rule, pattern in PATTERNS:
+            if m := pattern.search(norm):
+                return ScreenResult(rule=rule, matched=m.group(0), via=via)
     return ScreenResult(rule=None, matched=None)
