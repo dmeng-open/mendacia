@@ -3,7 +3,6 @@ import math
 import os
 import uuid
 from collections.abc import Iterator
-from dataclasses import replace
 from pathlib import Path
 from typing import Any, Literal
 
@@ -228,7 +227,9 @@ def test_index_drops_rows_whose_chunk_no_longer_exists(indexed: Any) -> None:
     assert count(case) == rows - 1
 
 
-def test_authorize_recheck_drops_and_logs_a_forged_row(indexed: Any) -> None:
+def test_authorize_recheck_drops_and_logs_a_forged_row(
+    indexed: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     case = variant("forged")
     retriever = indexed(case, {"solicitor_letter": 0.0})
     with ENGINE.begin() as conn:
@@ -244,12 +245,13 @@ def test_authorize_recheck_drops_and_logs_a_forged_row(indexed: Any) -> None:
     assert "solicitor_letter" not in {h.document_id for h in retriever.search(honest, query)}
     assert security_rows(honest.subject.game_id) == []
 
-    faulty = replace(honest, visible=honest.visible | {"solicitor_letter"})
-    assert "solicitor_letter" not in {h.document_id for h in retriever.search(faulty, query)}
-    [row] = security_rows(honest.subject.game_id)
-    assert row[:3] == ("search_evidence", "deny", "acl_leak:locked")
-    assert "solicitor_letter" in row[3]
-    assert "Cottage Hospital" not in row[3]
+    monkeypatch.setattr("evidence.search.visible_documents", lambda c, *_: c.documents)
+    assert "solicitor_letter" in honest.visible
+    assert "solicitor_letter" not in {h.document_id for h in retriever.search(honest, query)}
+    rows = security_rows(honest.subject.game_id)
+    assert {row[:3] for row in rows} == {("search_evidence", "deny", "acl_leak:locked")}
+    assert any("solicitor_letter" in row[3] for row in rows)
+    assert not any("Cottage Hospital" in row[3] for row in rows)
 
 
 def test_player_scope_checks_its_boundary() -> None:
@@ -276,3 +278,9 @@ def test_long_paragraph_is_split_under_the_cap() -> None:
     assert len(chunks) > 1
     assert all(approx_tokens(c.text) <= MAX_TOKENS for c in chunks)
     assert [c.ordinal for c in chunks] == list(range(len(chunks)))
+
+
+@pytest.mark.parametrize("query", ["a\x00b", "\ud800 will", "\x00"])
+def test_nul_and_lone_surrogates_are_dropped_from_the_query(query: str) -> None:
+    case = variant("nul")
+    AuthorizedRetriever(ENGINE, Embedder(case, {}).query).search(scope(case), query)

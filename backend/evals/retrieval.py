@@ -68,6 +68,8 @@ def load_queries(path: Path, cases: Mapping[Id, Case]) -> list[tuple[LabelledQue
         if case is None:
             raise ValueError(f"{where}: unknown case '{raw['case']}'")
         state = raw.get("state") or {}
+        if extra := set(state) - {"discovered", "opened"}:
+            raise ValueError(f"{where}: unknown state keys {sorted(extra)}")
         q = LabelledQuery(
             case.id,
             raw["query"],
