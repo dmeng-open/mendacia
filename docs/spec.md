@@ -205,7 +205,14 @@ The browser, the CLI, and the detective bot use the same `app/games.py` service.
 | `GET /cases` | Playable cases (P4-2) |
 | `GET /healthz` | Liveness and database check (built) |
 
-Every mutating request on a game carries an `Idempotency-Key` header (each WebSocket frame carries `idempotency_key`) and the `state_version` it was made at. `POST /games` needs no key. Errors return `{"code": "<reason_code>", "message": "<player-safe text>"}`. Reason codes are `no_questions_left`, `no_hints_left`, `not_visible`, `already_accused`, `not_accused`, `screened`, `cooldown`, `stale_state`, `denied`, `unavailable`, `budget_exhausted`, and `bad_request`. No response before the reveal contains the culprit id, a secret fact, a `solution_chain` id, or the canary. P3-6 enforces this in Playwright.
+Every mutating request on a game carries an `Idempotency-Key` header (each WebSocket frame carries `idempotency_key`) and the `state_version` it was made at. `POST /games` needs no key. Errors return `{"code": "<reason_code>", "message": "<player-safe text>"}`. Reason codes are `no_questions_left`, `no_hints_left`, `not_visible`, `already_accused`, `not_accused`, `screened`, `cooldown`, `stale_state`, `denied`, `unavailable`, `budget_exhausted`, and `bad_request`. No response before the reveal contains the culprit id, a secret fact, a `solution_chain` id, or the canary. P3-6 enforces this in Playwright: `frontend/e2e/no-spoilers.spec.ts` plays each case and scans every response, every WebSocket frame, the page text, and `sessionStorage` up to the reveal.
+
+### 7.1 Browser client (built, P3-6, ADR 017)
+
+- `/` lists the playable cases. `/?case=<id>` creates a game and opens `/play/<gameId>`. The reveal is `/play/<gameId>/reveal`. No page lives under `/games`, which the dev and preview servers proxy to the backend, WebSocket included, so the path-scoped session cookie stays same-origin.
+- The page has three columns on wide screens and Case, Chat, and Archive tabs on a phone. Before the reveal it shows only questions left, hints left, discovered clues, visible documents (unopened ones as sealed), the player's own transcript, and hints already taken. It shows no scores, counts of hidden documents, or rankings; search hits are shown in order without their score.
+- A reply shows "thinking", then "checking" when the server sends `validating`, then streams. A refused turn shows a player-safe line and "No question was spent."
+- The server does not keep a transcript for the client, so the browser keeps the conversation, hints, and the accusation in `sessionStorage` for the tab. It ends with the browser session, like the session cookie.
 
 ## 8. Evals and release gates
 
