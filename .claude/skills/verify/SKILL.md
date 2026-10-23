@@ -30,11 +30,11 @@ Run every command from the repository root unless a step says `cd frontend`.
 
    `make seed` indexes the three cases. In `LLM_MODE=replay` it uses recorded embeddings and costs nothing.
 
-3. Start the backend and the frontend in the background. Keep their PIDs for cleanup.
+3. Start the backend and the frontend in the background, each in its own process group, and keep the group ids for cleanup.
 
    ```sh
-   make api > /tmp/lane-$n-api.log 2>&1 & echo $! > /tmp/lane-$n-api.pid
-   make web > /tmp/lane-$n-web.log 2>&1 & echo $! > /tmp/lane-$n-web.pid
+   setsid make api > /tmp/lane-$n-api.log 2>&1 & echo $! > /tmp/lane-$n-api.pid
+   setsid make web > /tmp/lane-$n-web.log 2>&1 & echo $! > /tmp/lane-$n-web.pid
    ```
 
    `LLM_MODE` comes from `.env` or the environment. Use `replay` to replay the walkthroughs for free. Use `live` for a live lane, with `LANE_MAX_USD=1`.
@@ -105,7 +105,7 @@ To drive by hand in a new spec, import `detective` from `./detective`. Its verbs
 
 - `start.png` after the case loads.
 - `NN-<step>.png` after each step.
-- `chat-streaming.png` while the first reply streams. Replayed replies can finish before a frame paints, so this file is missing in replay mode more often than in live mode. `chat-reply.png` is always taken after the first reply.
+- `chat-streaming.png` while the first reply streams. A replayed reply can finish before a frame paints, so in replay mode set `VERIFY_FRAME_DELAY_MS=150`, which holds each server frame for that long before the page gets it. `chat-reply.png` is always taken after the first reply.
 - `archive-highlight.png` after the first search. A hit shows its passage with `<mark>` highlights.
 - `accuse.png` with the accusation dialog filled in, before confirming.
 - `reveal.png` with the ruling and the timeline.
@@ -127,7 +127,7 @@ Proof standards:
 Kill only what this run started. Screenshots stay in `$VERIFY_OUT`.
 
 ```sh
-kill "$(cat /tmp/lane-$n-api.pid)" "$(cat /tmp/lane-$n-web.pid)"
+kill -- -"$(cat /tmp/lane-$n-api.pid)" -"$(cat /tmp/lane-$n-web.pid)"
 psql "postgresql://mendacia:mendacia@localhost/postgres" -c "drop database if exists mendacia_lane_$n"
 ```
 

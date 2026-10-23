@@ -56,7 +56,7 @@ export function ChatPanel({ gameId, suspect }: { gameId: GameId; suspect: Suspec
       {who && (
         <form onSubmit={submit} className="flex flex-col gap-2 border-t border-stone-200 pt-3">
           {(view.clues.length > 0 || opened.length > 0) && (
-            <fieldset className="flex flex-wrap gap-1">
+            <fieldset className="flex min-w-0 flex-wrap gap-1">
               <legend className="mb-1 text-xs text-stone-500">Present evidence (optional)</legend>
               {view.clues.map((c) => (
                 <Toggle
@@ -118,7 +118,7 @@ function ExchangeView({ exchange, name }: { exchange: Exchange; name: string }) 
         <Bubble from={name}>
           {reply.text}
           {reply.newClues.map((c) => (
-            <Badge key={c.id} className="mt-2 block w-fit">
+            <Badge key={c.id} className="mt-2 flex w-fit rounded-md">
               New clue: {c.description}
             </Badge>
           ))}

@@ -79,15 +79,15 @@ export function detective(page: Page) {
       await page.getByLabel("Your question").fill(question);
       await page.getByRole("button", { name: "Ask", exact: true }).click();
       if (whileStreaming) {
-        const streaming = page.locator('[data-turn-phase="streaming"]');
-        if (
-          await streaming.waitFor({ timeout: 45_000 }).then(
-            () => true,
-            () => false,
-          )
-        ) {
-          await whileStreaming();
-        }
+        const settled = await page.waitForFunction(
+          () => {
+            const p = document.querySelector("[data-turn-phase]")?.getAttribute("data-turn-phase");
+            return p === "streaming" ? p : p ? false : "done";
+          },
+          undefined,
+          { timeout: 45_000, polling: "raf" },
+        );
+        if ((await settled.jsonValue()) === "streaming") await whileStreaming();
       }
       await expect(page.locator("[data-turn-phase]")).toHaveCount(0, { timeout: 45_000 });
       await expect(transcript()).toHaveCount(before + 1);

@@ -26,6 +26,23 @@ test("verify: play a case and capture evidence", async ({ page }, info) => {
     await shot(name);
   };
 
+  const delay = Number(process.env.VERIFY_FRAME_DELAY_MS ?? "0");
+  if (delay > 0) {
+    // Replayed replies stream faster than a frame paints; spacing the real frames out lets the
+    // screenshot catch the streaming state. The frames themselves are unchanged.
+    await page.routeWebSocket(/\/ask$/, (ws) => {
+      const server = ws.connectToServer();
+      let queue = Promise.resolve();
+      server.onMessage((message) => {
+        queue = queue
+          .then(() => new Promise((resolve) => setTimeout(resolve, delay)))
+          .then(() => {
+            ws.send(message);
+          });
+      });
+    });
+  }
+
   const d = detective(page);
   await d.start(caseId);
   await shot("start");
