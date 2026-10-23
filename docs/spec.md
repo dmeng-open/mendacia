@@ -58,7 +58,7 @@ These hold in every mode and every PR.
 - `Fact`: a `Statement` (`subject`, `predicate`, `object`, `time_slot`) with an `id` and `known_by`. Predicates form a closed set: `at`, `has`, `saw`, `owes`, `heard`. `at`, `saw`, and `heard` need a time slot.
 - `PlannedLie`: `suspect`, `hides_fact` (which must be one of that suspect's secrets), `claim` (a `Statement`), and `says` (the spoken wording).
 - `Clue`: `kind` is `testimony` or `evidence`, and `reveals` lists fact ids. An evidence clue needs a `doc_id`.
-- `EvidenceDoc`: `id`, `title`, `body`, `is_key`. P3-3 adds `source` (provenance) and `visibility` (`open`, or `unlocked_by` a list of clue or document ids), with an ADR and updates to every case.
+- `EvidenceDoc`: `id`, `title`, `source` (provenance label), `body`, `is_key`, and `visibility` (`open`, or `unlocked_by` a list of clue or document ids). Built in P3-3, ADR 008. A locked document is closed to the player and never reaches a prompt until something in `unlocked_by` is found.
 - Ids match `^[a-z][a-z0-9_]*$` and are never a clingo keyword. One validator checks every reference and names the JSON path and the dangling id.
 
 **`case_version`** (built, P3-2) is the SHA-256 of the case's canonical JSON (sorted keys, no whitespace), from `security.context.case_version`. Every game, turn, index row, security event, and eval run records it. Security events record it from P3-2; games, turns, and index rows from P3-4 and P3-5. Editing a published case creates a new version and never mutates the old one.
