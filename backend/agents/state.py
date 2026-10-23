@@ -8,29 +8,20 @@ from enum import Enum
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 from agents.claims import Claim
 from agents.events import Rule
 from agents.ledger import Ledger
 from agents.verifier import ClaimCheck, Verdict
+from agents.view import Exchange, Frozen, PermittedClaims, SuspectView
 from engine.schema import Case, Id
 
 HISTORY_WINDOW = 6
 UNCHECKED = "say it again in short, plain sentences: what you know, or that you do not know"
 
 
-class _Frozen(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-
-class Exchange(_Frozen):
-    question: str
-    shown: tuple[Id, ...]
-    reply: str
-
-
-class Check(_Frozen):
+class Check(Frozen):
     claim: Claim
     verdict: Verdict
     ref: Id | None
@@ -45,12 +36,13 @@ class Check(_Frozen):
         return ClaimCheck(self.claim, self.verdict, self.ref, self.reason).rule
 
 
-class Attempt(_Frozen):
+class Attempt(Frozen):
     draft: str
     claims: tuple[Claim, ...] = ()
     checks: tuple[Check, ...] = ()
     unreadable: bool = False
     unchecked: bool = False
+    leaked: bool = False
 
     @property
     def blocked(self) -> tuple[Check, ...]:
@@ -58,21 +50,23 @@ class Attempt(_Frozen):
 
     @property
     def verified(self) -> bool:
-        return bool(self.draft) and not (self.unreadable or self.unchecked or self.blocked)
+        return bool(self.draft) and not (
+            self.unreadable or self.unchecked or self.leaked or self.blocked
+        )
 
     @property
     def feedback(self) -> str:
-        if self.unreadable or self.unchecked:
+        if self.unreadable or self.unchecked or self.leaked:
             return f"- {UNCHECKED}"
         return "\n".join(f"- {c.claim.render()}: {c.reason}" for c in self.blocked)
 
 
-class TurnInput(_Frozen):
+class TurnInput(Frozen):
     question: str
     present: tuple[Id, ...] = ()
 
 
-class SuspectState(_Frozen):
+class SuspectState(Frozen):
     ledger: Ledger = Ledger()
     presented: tuple[Id, ...] = ()
     history: tuple[Exchange, ...] = ()
@@ -81,6 +75,9 @@ class SuspectState(_Frozen):
     present: tuple[Id, ...] = ()
     attempts: tuple[Attempt, ...] = ()
     fell_back: bool = False
+    trace_id: str = ""
+    view: SuspectView | None = None
+    permitted: PermittedClaims | None = None
 
     @property
     def turn(self) -> int:

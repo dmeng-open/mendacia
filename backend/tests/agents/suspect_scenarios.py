@@ -171,7 +171,7 @@ def _authored(drafts: tuple[str, ...]) -> Iterator[None]:
     queue = iter(drafts)
     real = agents.suspect._speak
 
-    async def speak(seat: Seat, messages: list[dict[str, Any]]) -> str:
+    async def speak(seat: Seat, messages: list[dict[str, Any]], version: str = "") -> str:
         return next(queue)
 
     agents.suspect._speak = speak

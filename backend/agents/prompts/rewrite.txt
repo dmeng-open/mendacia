@@ -1,0 +1,6 @@
+prompt_version: rewrite-1
+
+@@ request
+You cannot say that. These parts of your answer must change:
+$feedback
+Answer the detective's question again, in character, without them.

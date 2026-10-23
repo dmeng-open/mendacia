@@ -13,29 +13,56 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
+from agents import prompts
 from agents.events import Action, Rule, log_event
 from agents.extract import ExtractionFailed, extract_claims
-from agents.ledger import LedgerEntry, LieStatus
+from agents.ledger import LedgerEntry
 from agents.state import (
     Attempt,
     Check,
-    Exchange,
     Seat,
     SuspectState,
     TurnInput,
     open_checkpointer,
 )
-from agents.verifier import exposed_facts, stateable_facts, verify_reply
+from agents.verifier import UNKNOWN, Verdict, leaks_canary, verify_reply
+from agents.view import (
+    Exchange,
+    PermittedClaims,
+    PublicCase,
+    SuspectView,
+    build_view,
+    suspect_context,
+)
 from app.config import Settings
 from app.llm import ModelRole, complete
 from engine.schema import Case, Id, Statement
+from security.context import AuthContext
+from security.events import TraceStep, log_decision
+from security.policy import Decision, PolicyContext, Resource, authorize
 
 FALLBACK = "I'd rather not answer that."
 MAX_ATTEMPTS = 3
 SUSPECT_ROLE = ModelRole.FAST
 SUSPECT_MAX_TOKENS = 1024
+SUSPECT = prompts.load("suspect")
+REWRITE = prompts.load("rewrite")
+ALLOWED = {Verdict.ADMISSION: "facts", Verdict.KNOWN_TRUE: "facts", Verdict.PLANNED_LIE: "lies"}
 
-Node = Literal["retrieve", "generate", "extract", "verify", "rewrite", "fallback", "commit"]
+Node = Literal[
+    "retrieve",
+    "permitted_claims",
+    "generate",
+    "extract",
+    "verify",
+    "rewrite",
+    "fallback",
+    "commit",
+]
+
+
+class StaleState(RuntimeError):
+    pass
 
 
 @dataclass(frozen=True)
@@ -92,12 +119,22 @@ class Interrogation:
 
 
 async def retrieve(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, object]:
-    return {"attempts": (), "fell_back": False}
+    seat = runtime.context
+    subject = suspect_context(seat.case, seat.suspect, seat.game_id, len(state.history))
+    view, trace = build_view(
+        seat.case, subject, state.shown, state.ledger.of(seat.suspect), state.recent
+    )
+    trace_id = uuid.uuid4().hex
+    await _audit(subject, trace_id, state.turn, "retrieve", "knowledge", _ok("view_built"), trace)
+    return {"attempts": (), "fell_back": False, "trace_id": trace_id, "view": view}
+
+
+async def permitted_claims(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, object]:
+    return {"permitted": PermittedClaims.of(_view(state))}
 
 
 async def generate(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, object]:
-    seat = runtime.context
-    text = await _speak(seat, suspect_messages(seat, state))
+    text = await _speak(runtime.context, suspect_messages(_view(state), state))
     return {"attempts": (Attempt(draft=text),)}
 
 
@@ -117,11 +154,42 @@ async def extract(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, obje
 async def verify(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, object]:
     seat = runtime.context
     last = state.attempts[-1]
+    started = time.perf_counter()
     result = verify_reply(seat.case, seat.suspect, last.claims, state.ledger, state.shown)
-    checks = tuple(map(Check.of, result.checks))
+    permitted = state.permitted or PermittedClaims(facts=(), lies=())
+    checks = tuple(bound(Check.of(c), permitted) for c in result.checks)
     unchecked = not last.claims and mentions_case(seat.case, last.draft)
-    update = {"checks": checks, "unchecked": unchecked}
-    return {"attempts": (*state.attempts[:-1], last.model_copy(update=update))}
+    leaked = leaks_canary(seat.case, last.draft)
+    attempt = last.model_copy(update={"checks": checks, "unchecked": unchecked, "leaked": leaked})
+    reason = (
+        "verified"
+        if attempt.verified
+        else "canary"
+        if leaked
+        else "blocked_claims"
+        if attempt.blocked
+        else "unchecked"
+    )
+    decision = _ok(reason) if attempt.verified else Decision("deny", reason)
+    ms = (time.perf_counter() - started) * 1000
+    outcome = f"claims={len(checks)} blocked={len(attempt.blocked)} attempt={len(state.attempts)}"
+    await _audit(
+        _subject(seat, state),
+        state.trace_id,
+        state.turn,
+        "verify",
+        "reply",
+        decision,
+        (TraceStep("verify", outcome, round(ms, 3)),),
+    )
+    return {"attempts": (*state.attempts[:-1], attempt)}
+
+
+def bound(check: Check, permitted: PermittedClaims) -> Check:
+    kind = ALLOWED.get(check.verdict)
+    if kind is None or check.ref in getattr(permitted, kind):
+        return check
+    return check.model_copy(update={"verdict": Verdict.BLOCK_UNPLANNED, "reason": UNKNOWN})
 
 
 def after_draft(state: SuspectState) -> Literal["extract", "fallback"]:
@@ -150,11 +218,11 @@ async def rewrite(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, obje
     seat = runtime.context
     last = state.attempts[-1]
     messages = [
-        *suspect_messages(seat, state),
+        *suspect_messages(_view(state), state),
         {"role": "assistant", "content": last.draft},
         {"role": "user", "content": rewrite_request(last.feedback)},
     ]
-    text = await _speak(seat, messages)
+    text = await _speak(seat, messages, f"{SUSPECT.version}+{REWRITE.version}")
     await _log_unverified(seat, state, "rewrite")
     return {"attempts": (*state.attempts, Attempt(draft=text))}
 
@@ -166,6 +234,17 @@ async def fallback(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, obj
 
 async def commit(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, object]:
     seat = runtime.context
+    view = _view(state)
+    master = AuthContext(
+        "game_master", "game_master", seat.game_id, view.case_version, view.state_version
+    )
+    turn = Resource("turn", str(state.turn), view.case_version, "conversation")
+    decision = authorize(master, "commit_turn", turn, PolicyContext(len(state.history)))
+    outcome = "fallback" if state.fell_back else "released"
+    trace = (TraceStep("commit", outcome, 0.0),)
+    await _audit(master, state.trace_id, state.turn, "commit_turn", "turn", decision, trace)
+    if not decision.allowed:
+        raise StaleState(decision.reason_code)
     claims = () if state.fell_back else state.attempts[-1].claims
     result = verify_reply(seat.case, seat.suspect, claims, state.ledger, state.shown)
     reply = FALLBACK if state.fell_back else state.attempts[-1].draft
@@ -180,6 +259,7 @@ async def commit(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, objec
 def _build() -> StateGraph[SuspectState, Seat, TurnInput, SuspectState]:
     g = StateGraph(SuspectState, context_schema=Seat, input_schema=TurnInput)
     g.add_node("retrieve", retrieve)
+    g.add_node("permitted_claims", permitted_claims)
     g.add_node("generate", generate)
     g.add_node("extract", extract)
     g.add_node("verify", verify)
@@ -187,7 +267,8 @@ def _build() -> StateGraph[SuspectState, Seat, TurnInput, SuspectState]:
     g.add_node("fallback", fallback)
     g.add_node("commit", commit)
     g.add_edge(START, "retrieve")
-    g.add_edge("retrieve", "generate")
+    g.add_edge("retrieve", "permitted_claims")
+    g.add_edge("permitted_claims", "generate")
     g.add_conditional_edges("generate", after_draft)
     g.add_edge("extract", "verify")
     g.add_conditional_edges("verify", after_verify)
@@ -200,7 +281,7 @@ def _build() -> StateGraph[SuspectState, Seat, TurnInput, SuspectState]:
 GRAPH = _build()
 
 
-async def _speak(seat: Seat, messages: list[dict[str, Any]]) -> str:
+async def _speak(seat: Seat, messages: list[dict[str, Any]], version: str = "") -> str:
     out = await asyncio.to_thread(
         complete,
         SUSPECT_ROLE,
@@ -208,13 +289,54 @@ async def _speak(seat: Seat, messages: list[dict[str, Any]]) -> str:
         purpose="suspect",
         game_id=seat.game_id,
         max_tokens=SUSPECT_MAX_TOKENS,
+        prompt_version=version or SUSPECT.version,
     )
     return out.text.strip()
+
+
+def _view(state: SuspectState) -> SuspectView:
+    if state.view is None:
+        raise RuntimeError("the turn has no view; retrieve must run first")
+    return state.view
+
+
+def _subject(seat: Seat, state: SuspectState) -> AuthContext:
+    view = _view(state)
+    return AuthContext(seat.suspect, "suspect", seat.game_id, view.case_version, view.state_version)
+
+
+def _ok(reason: str) -> Decision:
+    return Decision("allow", reason)
+
+
+async def _audit(
+    subject: AuthContext,
+    trace_id: str,
+    turn: int,
+    action: str,
+    resource_type: str,
+    decision: Decision,
+    trace: tuple[TraceStep, ...],
+) -> None:
+    await asyncio.to_thread(
+        log_decision,
+        subject,
+        trace_id=trace_id,
+        turn_id=turn,
+        action=action,
+        resource_type=resource_type,
+        decision=decision,
+        latency_ms=sum(step.ms for step in trace),
+        trace=trace,
+        prompt_version=SUSPECT.version,
+    )
 
 
 async def _log_unverified(seat: Seat, state: SuspectState, action: Action) -> None:
     last = state.attempts[-1]
     rows: list[tuple[Rule, str]] = [(c.rule, c.claim.render()) for c in last.blocked]
+    if last.leaked:
+        rows.append(("unverified", "canary"))
     if not rows:
         reason = "empty draft" if not last.draft else "no checkable claims"
         rows = [("unverified", reason)]
@@ -230,87 +352,45 @@ async def _log_unverified(seat: Seat, state: SuspectState, action: Action) -> No
         )
 
 
-def suspect_messages(seat: Seat, state: SuspectState) -> list[dict[str, Any]]:
-    messages: list[dict[str, Any]] = [{"role": "system", "content": suspect_brief(seat, state)}]
-    for x in state.recent:
-        messages.append({"role": "user", "content": _player_line(seat.case, x.question, x.shown)})
+def suspect_messages(view: SuspectView, state: SuspectState) -> list[dict[str, Any]]:
+    messages: list[dict[str, Any]] = [{"role": "system", "content": suspect_brief(view)}]
+    for x in view.history:
+        messages.append({"role": "user", "content": _player_line(view, x.question, x.shown)})
         messages.append({"role": "assistant", "content": x.reply})
-    messages.append(
-        {"role": "user", "content": _player_line(seat.case, state.question, state.present)}
-    )
+    messages.append({"role": "user", "content": _player_line(view, state.question, state.present)})
     return messages
 
 
-def suspect_brief(seat: Seat, state: SuspectState) -> str:
-    case, me = seat.case, seat.suspect
-    person = next(s for s in case.suspects if s.id == me)
-    exposed = exposed_facts(case, state.shown)
-    by_id = {f.id: f for f in case.facts}
-    own = case.secrets.get(me, ())
-    hidden = [by_id[f] for f in own if f not in exposed]
-    proven = [by_id[f] for f in own if f in exposed]
-    shown = [c for c in case.clues if c.id in state.shown]
-    status = {e.lie.id: e.status for e in state.ledger.of(me)}
+def suspect_brief(view: SuspectView) -> str:
+    public, me = view.public, view.me.id
 
     def say(s: Statement) -> str:
-        return render_statement(case, s, me)
+        return render_statement(public, s, me)
 
-    lines = [
-        f"You are {person.name}: {person.description}",
-        f"{case.title}. {case.summary}",
-        "The player is a detective questioning you. Stay in character as "
-        f"{person.name}. Answer in one to three short spoken sentences, with no stage "
-        "directions and no narration.",
-        "The hours that matter tonight are " + ", ".join(case.time_slots) + ". Whenever you "
-        "say where someone was, or what someone saw or heard, name the exact hour. Never "
-        'say "all evening" or "all night".',
-        "",
-        "What you know and may say if asked:",
-        *([f"- {say(f)}" for f in stateable_facts(case, me, state.shown)] or ["- nothing"]),
-    ]
-    if hidden:
-        lines += [
-            "",
-            "Your secrets. Never say them, hint at them, or confirm them:",
-            *(f"- {say(f)}" for f in hidden),
-        ]
-    if shown:
-        lines += ["", "Evidence the detective has shown you:"]
-        lines += [f"- {c.description}" for c in shown]
-    if proven:
-        lines += [
-            "",
-            "The detective has proof of these, so if asked, admit them plainly:",
-            *(f"- {say(f)}" for f in proven),
-        ]
-    for lie in (lie for lie in case.planned_lies if lie.suspect == me):
-        spent = lie.hides_fact in exposed or status.get(lie.id) in (
-            LieStatus.EXPOSED,
-            LieStatus.ADMITTED,
-        )
-        if spent:
-            lines += [
-                "",
-                f"You once claimed that {say(lie.claim)}. The evidence has caught that lie. "
-                "Never repeat it.",
-            ]
-        else:
-            lines += [
-                "",
-                f"Your cover story: {say(lie.claim)}. Tell it if asked about that hour, in "
-                f'words like "{lie.says}", but always name the hour. This is the only lie '
-                "you may tell.",
-            ]
-    lines += [
-        "",
-        "Say nothing else about where anyone was, what anyone had, saw, or heard, or who "
-        "killed whom, and state what you know as given: knowing where someone was is not "
-        "having seen them. If you do not know, or will not say, say so in character.",
-    ]
+    intro = SUSPECT.render(
+        "intro",
+        name=view.me.name,
+        description=view.me.description,
+        title=public.title,
+        summary=public.summary,
+        hours=", ".join(public.time_slots),
+    )
+    lines = [intro, *([f"- {say(f)}" for f in view.stateable] or [SUSPECT.render("nothing")])]
+    if view.hidden:
+        lines += ["", SUSPECT.render("secrets"), *(f"- {say(f)}" for f in view.hidden)]
+    if view.shown:
+        lines += ["", SUSPECT.render("shown"), *(f"- {c.description}" for c in view.shown)]
+    if view.proven:
+        lines += ["", SUSPECT.render("proven"), *(f"- {say(f)}" for f in view.proven)]
+    for s in view.lies:
+        claim = say(s.lie.claim)
+        section = "spent_lie" if s.spent else "cover_story"
+        lines += ["", SUSPECT.render(section, claim=claim, says=s.lie.says)]
+    lines += ["", SUSPECT.render("closing")]
     return "\n".join(lines)
 
 
-def render_statement(case: Case, s: Statement, me: Id) -> str:
+def render_statement(case: PublicCase, s: Statement, me: Id) -> str:
     names = {p.id: p.name for p in (*case.suspects, case.victim)}
     who = "you" if s.subject == me else names.get(s.subject, s.subject)
     obj = "you" if s.object == me else names.get(s.object, s.object)
@@ -329,20 +409,16 @@ def render_statement(case: Case, s: Statement, me: Id) -> str:
             return f"{who} {'owe' if who == 'you' else 'owes'} {obj} money"
 
 
-def _player_line(case: Case, question: str, shown: Collection[Id]) -> str:
-    clues = [c for c in case.clues if c.id in shown]
+def _player_line(view: SuspectView, question: str, shown: Collection[Id]) -> str:
+    clues = [c for c in view.shown if c.id in shown]
     if not clues:
         return question
-    evidence = " ".join(f"[The detective shows you: {c.description}]" for c in clues)
+    evidence = " ".join(SUSPECT.render("evidence", description=c.description) for c in clues)
     return f"{evidence}\n{question}"
 
 
 def rewrite_request(feedback: str) -> str:
-    return (
-        "You cannot say that. These parts of your answer must change:\n"
-        f"{feedback}\n"
-        "Answer the detective's question again, in character, without them."
-    )
+    return REWRITE.render("request", feedback=feedback)
 
 
 def _print_report(report: TurnReport, elapsed_ms: int) -> None:
