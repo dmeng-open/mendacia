@@ -172,7 +172,9 @@
       "source": "cctv_log",
       "body": "Camera E2. 18:58 visitor enters. 19:00 to 19:12 visitor (female, grey coat, identified as Lady Wren) stands at catalogue no. 14. 19:13 visitor exits north.",
       "is_key": true,
-      "visibility": "open"
+      "visibility": {
+        "unlocked_by": ["security_desk_memo"]
+      }
     },
     {
       "id": "vault_door_log",
@@ -187,6 +189,122 @@
       "title": "Letter from the curator to Lady Wren",
       "source": "letter",
       "body": "Lady Wren, catalogue no. 14 is not what you sold us. The gallery requires the full price returned by Friday, or I go to the police.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "security_desk_memo",
+      "title": "Security desk memo",
+      "source": "security_memo",
+      "body": "Opening night. East hall camera E2, footage 18:00 to 20:00, copied and handed to the police at their request. A second copy is held at the security desk for viewing.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "private_view_invitation",
+      "title": "Private view invitation",
+      "source": "invitation",
+      "body": "The Vermilion Gallery requests the pleasure of your company at the opening of new works by Theo Vance. Friday, from six. Doors close at six for the private view.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "hanging_plan",
+      "title": "Hanging plan for the season",
+      "source": "hanging_plan",
+      "body": "West hall: nos. 1 to 9, Theo Vance, new works. East hall: nos. 10 to 16, the permanent collection, including no. 14, Harbour at Dusk, acquired from Lady Wren. Vault: works awaiting authentication.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "catering_invoice",
+      "title": "Catering invoice",
+      "source": "invoice",
+      "body": "Bellweather Catering to the Vermilion Gallery, attn. P. Lund. One hundred and twenty canapes, four cases of sparkling wine, coffee service for the cafe. Payment due in thirty days.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "review_clipping",
+      "title": "Clipping from the arts pages",
+      "source": "newspaper",
+      "body": "Of Theo Vance's last show, the curator Ines Marlow wrote that it was competent, airless, and forgettable. Vance has said he has not forgotten it.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "guard_rota",
+      "title": "Guard rota",
+      "source": "rota",
+      "body": "Friday. Day guard D. Hale, 09:00 to 18:00. Night guard S. Okafor, 18:00 to 06:00. Relief on Saturday from the agency.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "packing_room_list",
+      "title": "Packing room list",
+      "source": "inventory",
+      "body": "Crate 3, unpacked Thursday. Bronze statuette, Vermilion collection no. 22. Marble head, no. 23. Two plinths. Both pieces to stay in the packing room until the insurer's valuation.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "insurer_letter",
+      "title": "Letter from the insurer",
+      "source": "letter",
+      "body": "Dear Ms. Marlow, cover on catalogue no. 14 is suspended until the authentication you requested is complete. We will need the conservator's findings in writing.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "conservator_report",
+      "title": "Conservator's report on no. 14",
+      "source": "conservator_report",
+      "body": "Canvas machine-woven, ground contains titanium white. The work cannot date from the 1890s as catalogued. My opinion is that it is a modern copy.",
+      "is_key": false,
+      "visibility": {
+        "unlocked_by": ["refund_demand"]
+      }
+    },
+    {
+      "id": "run_sheet",
+      "title": "Opening night run sheet",
+      "source": "schedule",
+      "body": "18:00 doors locked, private view begins. 18:30 speeches. 20:00 guests out, lights down. The artist's talk is moved to Saturday at Mr. Vance's request.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "cafe_receipt",
+      "title": "Cafe till receipt",
+      "source": "receipt",
+      "body": "Vermilion Cafe. Two espresso, one lemon cake. 18:41. Paid in cash. Thank you for visiting.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "theo_note",
+      "title": "Note from Theo Vance to the curator",
+      "source": "letter",
+      "body": "Ines, hang the triptych where people can see it or take it down. I will not be buried at the end of a corridor again. T.V.",
+      "is_key": false,
+      "visibility": {
+        "unlocked_by": ["theo_cafe_testimony"]
+      }
+    },
+    {
+      "id": "lighting_work_order",
+      "title": "Electrician's work order",
+      "source": "work_order",
+      "body": "West hall track lighting flickering on circuits 2 and 3. Transformer to be replaced Monday. Do not adjust the spotlights before then.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "police_call_note",
+      "title": "Police call note",
+      "source": "police_report",
+      "body": "Call received 19:31 from the Vermilion Gallery. A woman found dead in the vault, head wound. Four persons on the premises held for questioning.",
       "is_key": false,
       "visibility": "open"
     }

@@ -194,6 +194,116 @@
       "body": "Loan to Dr. A. Finch, two thousand pounds, due at Michaelmas. Not repaid. Raise this with him on Saturday.",
       "is_key": false,
       "visibility": "open"
+    },
+    {
+      "id": "dinner_menu",
+      "title": "Saturday dinner menu",
+      "source": "menu",
+      "body": "Dinner at eight. Clear oxtail soup, sole meuniere, saddle of mutton, apple charlotte. Cold game pie and claret for the late supper tray at ten.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "staff_duties",
+      "title": "Staff duties for Saturday",
+      "source": "staff_rota",
+      "body": "Mr. Hobbs: wine, silver, and the ballroom lamps. Mrs. Pike: dinner and the late supper. Ellen, housemaid: night off, gone to her sister's in the village.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "barometer_note",
+      "title": "Hall barometer readings",
+      "source": "barometer_log",
+      "body": "Saturday morning, glass steady at 30.1. Evening, glass falling, wind south-west. Light rain expected overnight.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "solicitor_letter",
+      "title": "Letter from the family solicitor",
+      "source": "solicitor_letter",
+      "body": "My Lord, the revised will is drawn as you instructed and will be ready for your signature on Monday. The residue passes to the Cottage Hospital and not to Miss Ashcombe. I would urge you, once more, to tell her before you sign. Yours faithfully, R. Dunmore.",
+      "is_key": false,
+      "visibility": {
+        "unlocked_by": ["diary_page"]
+      }
+    },
+    {
+      "id": "finch_telegram",
+      "title": "Telegram for Dr. Finch",
+      "source": "telegram",
+      "body": "DR A FINCH CARE OF ASHCOMBE MANOR. YOUR ACCOUNT NOW SIX MONTHS IN ARREARS. SETTLEMENT EXPECTED BY MONDAY OR WE PROCEED. HARGREAVE AND SONS.",
+      "is_key": false,
+      "visibility": {
+        "unlocked_by": ["ashcombe_ledger"]
+      }
+    },
+    {
+      "id": "finch_bag_inventory",
+      "title": "Contents of Dr. Finch's medical bag",
+      "source": "inventory",
+      "body": "Stethoscope. Thermometer in case. Two rolls of lint. Phial of laudanum, half full. A pawnbroker's ticket for a gold half-hunter watch, folded in the lining.",
+      "is_key": false,
+      "visibility": {
+        "unlocked_by": ["pavilion_visitors_book"]
+      }
+    },
+    {
+      "id": "grocer_invoice",
+      "title": "Grocer's invoice",
+      "source": "invoice",
+      "body": "Dawlish and Sons, family grocers, to Mrs. Pike for Ashcombe Manor. Two pounds of best tea, one Stilton, a dozen lemons, six pounds of sugar. Account to be settled quarterly.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "library_register",
+      "title": "Library lending register",
+      "source": "library_register",
+      "body": "Thursday. Miss C. Ashcombe, The Moonstone, Mr. Collins, volume one. Dr. Finch, Gray's Anatomy, returned. Shelf above the window wants dusting.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "hunt_ball_clipping",
+      "title": "Clipping from the county paper",
+      "source": "newspaper",
+      "body": "The Ashcombe Hunt Ball, long a fixture of the season, will not be held this year. Lord Ashcombe is understood to have declined to open the ballroom, citing the expense.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "pavilion_garden_note",
+      "title": "Gardener's note on the pavilion",
+      "source": "garden_note",
+      "body": "Pavilion lamp needs a new wick and the chimney glass is cracked. Paths raked Friday. Roses by the pavilion steps want tying in before the frost.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "breakage_book",
+      "title": "Household breakage book",
+      "source": "household_book",
+      "body": "One Wedgwood cup, saucer saved. One pane in the conservatory, cracked by the wind. One wine glass from the ballroom set, chipped at the rim.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "ballroom_inventory",
+      "title": "Ballroom inventory",
+      "source": "inventory",
+      "body": "Gilt chairs, forty, stacked under dust sheets. Piano tuned in March. Chandeliers cleaned and lamps trimmed for the weekend.",
+      "is_key": false,
+      "visibility": "open"
+    },
+    {
+      "id": "constable_report",
+      "title": "Constable's first report",
+      "source": "police_report",
+      "body": "Telephone message received from Ashcombe Manor, Saturday night. Attended and found Lord Ashcombe dead in the study from a wound to the chest. No sign of forced entry. The household detained for questioning.",
+      "is_key": false,
+      "visibility": "open"
     }
   ],
   "solution_chain": ["pike_kitchen_testimony", "pike_saw_hobbs_testimony", "pavilion_book"],
