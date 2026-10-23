@@ -1,18 +1,19 @@
 import asyncio
-from types import SimpleNamespace
-from typing import cast
+import uuid
+from collections.abc import AsyncIterator
 
-from agents.suspect import Interview
-from app.cli import Game
+from app.cli import play
 from tests.agents.test_game_master import LOCKED
+
+
+async def given(lines: list[str]) -> AsyncIterator[str]:
+    for line in lines:
+        yield line
 
 
 def game(lines: list[str]) -> list[str]:
     said: list[str] = []
-    g = Game(LOCKED, cast(Interview, SimpleNamespace(game_id="g")), said.append)
-    g.intro()
-    for line in lines:
-        asyncio.run(g.handle(line))
+    asyncio.run(play(LOCKED, uuid.uuid4().hex, given(lines), said.append, echo=False))
     return said
 
 
