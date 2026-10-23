@@ -61,11 +61,11 @@ These hold in every mode and every PR.
 - `EvidenceDoc`: `id`, `title`, `body`, `is_key`. P3-3 adds `source` (provenance) and `visibility` (`open`, or `unlocked_by` a list of clue or document ids), with an ADR and updates to every case.
 - Ids match `^[a-z][a-z0-9_]*$` and are never a clingo keyword. One validator checks every reference and names the JSON path and the dangling id.
 
-**`case_version`** (planned, P3-2) is the SHA-256 of the case's canonical JSON (sorted keys, no whitespace). Every game, turn, index row, security event, and eval run records it. Editing a published case creates a new version and never mutates the old one.
+**`case_version`** (built, P3-2) is the SHA-256 of the case's canonical JSON (sorted keys, no whitespace), from `security.context.case_version`. Every game, turn, index row, security event, and eval run records it. Security events record it from P3-2; games, turns, and index rows from P3-4 and P3-5. Editing a published case creates a new version and never mutates the old one.
 
-**Canary** (planned, P3-2). Each case version has a random `canary` string that is stored only in the Truth layer. It never belongs in a prompt, an API response, a log line, or an eval transcript. If it shows up in any of those, that is a P0 leak.
+**Canary** (built, P3-2, ADR 007). Each case version has a canary, `MENDACIA-CANARY-<case_version[:12]>` from `security.context.canary`. It belongs only to the Truth layer. It never belongs in a prompt, an API response, a log line, or an eval transcript. If it shows up in any of those, that is a P0 leak. The canary derives from `case_version`, so it marks Truth-layer text reaching an output; it is not a secret, and a player who types it only makes the turn fall back at no cost.
 
-### 3.2 The four data layers (planned, P3-2; v2.1 §6.1)
+### 3.2 The four data layers (built, P3-2, ADR 007; v2.1 §6.1)
 
 | Layer | Holds | Who may read it |
 |---|---|---|
@@ -74,7 +74,7 @@ These hold in every mode and every PR.
 | Player | Discovered clues, opened documents, questions and hints left, unlocks, score | The owning session |
 | Conversation | Public statement history, the lie ledger, checkpoints, turn and `state_version` | The owning session (public part); the suspect turn (its own hidden part) |
 
-**Knowing is not disclosing.** A `KnowledgeGrant` has `can_know` and `can_disclose_when`. A suspect may know a secret and still not be allowed to say it. The disclosure trigger is a rule reference evaluated by code, never an expression string. In the MVP, grants are derived from `known_by`, `secrets`, `planned_lies`, and clue reveals. `agents.verifier.stateable_facts` is today's partial form of this layer.
+**Knowing is not disclosing.** A `KnowledgeGrant` has `can_know` and `can_disclose_when`. A suspect may know a secret and still not be allowed to say it. The disclosure trigger is a named rule evaluated by code (`always`, `after_clue(<ids>)`, `never_before_reveal`), never an expression string. `security.grants.grants_for` derives grants from `known_by`, `secrets`, and clue reveals. Planned lies are authorized by the `tell_lie` rule from their owner and the ledger.
 
 ### 3.3 Lie ledger (built, ADR 004)
 
@@ -96,11 +96,11 @@ These hold in every mode and every PR.
 The turn has nine steps (v2.1 §6.2). Steps marked built exist in `agents/suspect.py` and ADR 005. The rest land in the named PR.
 
 1. **request** (P3-5): verify the server session, game ownership, idempotency key, request size, rate, and quota. Run `screen_input`. Player text is data, never an instruction.
-2. **authorized_retrieval** (P3-2): build a `SuspectView` for `case_version + game_id + suspect_id + visibility + state_version`. The view holds only the minimum facts the suspect needs. Today `retrieve` is a no-op and `suspect_brief` reads the whole `Case`.
-3. **permitted_claims** (P3-2): rules compute what the suspect may state now, which lies it may tell, and which triggers have fired.
+2. **authorized_retrieval** (built, P3-2): `retrieve` builds a `SuspectView` (`agents/view.py`) for `case_version + game_id + suspect_id + state_version` through `authorize` only. The view holds a public projection of the case and the minimum facts the suspect needs; `suspect_brief` takes the view, not the `Case`. Visibility joins the key when documents gain it in P3-3.
+3. **permitted_claims** (built, P3-2): the node records the fact ids and lie ids the view permits. `verify` blocks any allowed verdict whose reference falls outside them.
 4. **generation** (built): the model writes a reply from the view only, using `agents.suspect.SUSPECT_ROLE` (today `ModelRole.FAST`) through `app.llm`. It has no tools and no Truth access.
 5. **claim_extraction** (built): `agents.extract.extract_claims` turns the draft into `Claim`s through PydanticAI on `ModelRole.FAST`. Extraction can miss claims, so it is not the only defense.
-6. **verification** (built, ADR 004): `verify_reply` gives each claim one verdict, applying the rules in order: `BLOCK_CULPRIT`, `ADMISSION`, `KNOWN_TRUE`, `PLANNED_LIE`, `BLOCK_UNPLANNED`, with denials judged by their own rule. From P3-2 on it also checks the canary and the `mentions_case` guard on the final text.
+6. **verification** (built, ADR 004): `verify_reply` gives each claim one verdict, applying the rules in order: `BLOCK_CULPRIT`, `ADMISSION`, `KNOWN_TRUE`, `PLANNED_LIE`, `BLOCK_UNPLANNED`, with denials judged by their own rule. From P3-2 on it also blocks the canary, and treats a draft with more than one paragraph as unchecked narration, beside the `mentions_case` guard.
 7. **repair_or_fallback** (built): up to 2 rewrites with verdict-blind feedback, then the fallback reply. Every fallback writes a `verifier_events` row.
 8. **commit** (built in memory; transactional in P3-5): one transaction writes the turn, the ledger, the quota, `state_version`, and an outbox row. A replayed idempotency key returns the stored result and spends nothing.
 9. **release** (P3-5): send only verified text. The WebSocket may send `thinking` and `validating` events at any time. It sends content chunks only after the whole reply has passed step 6. Raw model tokens are never streamed.
@@ -109,7 +109,7 @@ The turn has nine steps (v2.1 §6.2). Steps marked built exist in `agents/suspec
 
 The model proposes; the server decides. Every input check, fact read, tool call, verification, and commit carries the same `game_id`, `case_version`, actor, and `policy_version`.
 
-### 6.1 Authorization
+### 6.1 Authorization (built for suspect turns, P3-2, ADR 007)
 
 ```python
 authorize(subject, action, resource, context) -> Decision
@@ -122,7 +122,8 @@ authorize(subject, action, resource, context) -> Decision
 - Deny by default. An unknown action, tool, or resource type is denied with a reason code.
 - Roles set the base scope (player, suspect, game master, eval worker, detective bot). Attributes narrow it (case, phase, unlocks, ownership).
 - An authorization and the commit it guards use the same `state_version`. If the version changed in between, the action is denied (no TOCTOU).
-- Vector and full-text hits are filtered in SQL by case, version, and visibility, then each hit is checked again with `authorize`.
+- Vector and full-text hits are filtered in SQL by case, version, and visibility, then each hit is checked again with `authorize` (P3-4).
+- `security.policy.authorize` holds the table in code, with `POLICY_VERSION`; ADR 007 copies it, and a test fails when they disagree. P3-2 covers the suspect and game-master rows; P3-4 and P3-5 add the player, search, and tool rows.
 
 ### 6.2 Tool Broker (P3-5)
 
@@ -135,13 +136,15 @@ authorize(subject, action, resource, context) -> Decision
 - A denied call returns a structured reason code and costs the player nothing.
 - Every tool result carries provenance, visibility, and sensitivity metadata. Text returned by a tool is data, not policy.
 
-### 6.3 Agent manifest (P3-2)
+### 6.3 Agent manifest (built, P3-2)
 
 `backend/agents/registry.py` declares one entry per agent: suspect, extractor, game master, generator, repair, detective bot, and attack runner. Each entry gives the model role, the allowed tools, the readable data layers, and a sensitivity label. `make agent-inventory` scans the backend AST for every `app.llm` call site, tool reference, and table read, and fails when:
 
 - any agent's real use exceeds its manifest,
 - an agent that reads the Truth layer has no verifier, or
 - a call site belongs to no registered agent.
+
+The scan reads Truth-layer access as any use of `culprit`, `crime`, or `solution_chain` in an agent's modules. Tools join the scan in P3-5.
 
 ### 6.4 Input and output guards
 
@@ -155,9 +158,9 @@ authorize(subject, action, resource, context) -> Decision
 - Per session: once the count of blocked or screened attempts passes a threshold, the session gets a cooldown. A per-session token cap applies. Both thresholds are recorded as decisions in ADR 011.
 - A honeypot route `GET /games/{id}/solution` always returns 404, logs a `security_events` row with `reason_code=honeypot`, and flags the session.
 
-### 6.6 Audit (P3-2)
+### 6.6 Audit (built, P3-2)
 
-`security_events` has these columns: `trace_id`, `game_id`, `turn_id`, `actor_type`, `action`, `resource_type`, `policy_version`, `decision`, `reason_code`, `latency_ms`, `model_version`, `prompt_version`, `case_version`, `state_version`, `replay_ref`, and `decision_trace`. `decision_trace` is a JSON list of steps (auth, identity, policy, tool, verify, commit), each with its outcome and ms. Rows never hold Truth text, a full prompt, or a player's raw message. Reproduction goes through `replay_ref`.
+`security_events` has these columns: `trace_id`, `game_id`, `turn_id`, `actor_type`, `action`, `resource_type`, `policy_version`, `decision`, `reason_code`, `latency_ms`, `model_version`, `prompt_version`, `case_version`, `state_version`, `replay_ref`, and `decision_trace`. `decision_trace` is a JSON list of steps (auth, identity, policy, tool, verify, commit), each with its outcome and ms. Rows never hold Truth text, a full prompt, or a player's raw message. Reproduction goes through `replay_ref`. Each suspect turn writes a `retrieve` row with policy decision counts by reason code, one `verify` row per draft, and a `commit_turn` row. `security.events.log_decision` refuses a row that contains the canary.
 
 ### 6.7 Supply chain of agent instructions (P3-1)
 

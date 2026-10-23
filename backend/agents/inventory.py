@@ -1,0 +1,163 @@
+import ast
+import json
+import sys
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from agents.registry import AGENTS, LLM_ADAPTERS, AgentManifest
+
+BACKEND = Path(__file__).resolve().parents[1]
+SCANNED = ("agents", "app", "engine", "evals", "security")
+LLM_ENTRY = frozenset({"complete", "embed", "CompleteModel"})
+TRUTH_ATTRS = frozenset({"culprit", "crime", "solution_chain"})
+TABLES = frozenset({"llm_calls", "verifier_events", "security_events"})
+
+
+@dataclass(frozen=True)
+class CallSite:
+    module: str
+    line: int
+    role: str | None
+    purpose: str | None
+
+
+@dataclass(frozen=True)
+class ModuleUse:
+    module: str
+    calls: tuple[CallSite, ...]
+    reads_truth: bool
+    tables: frozenset[str]
+
+
+def sources(root: Path = BACKEND) -> list[tuple[str, str]]:
+    found = []
+    for package in SCANNED:
+        for path in sorted((root / package).rglob("*.py")):
+            module = ".".join(path.relative_to(root).with_suffix("").parts).removesuffix(
+                ".__init__"
+            )
+            found.append((module, path.read_text()))
+    return found
+
+
+def _name(node: ast.expr) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return None
+
+
+def _role(node: ast.expr | None, constants: dict[str, ast.expr]) -> str | None:
+    if isinstance(node, ast.Name) and node.id in constants:
+        node = constants[node.id]
+    if isinstance(node, ast.Attribute) and _name(node.value) == "ModelRole":
+        return node.attr.lower()
+    return None
+
+
+def scan_module(module: str, source: str) -> ModuleUse:
+    tree = ast.parse(source)
+    constants = {
+        t.id: stmt.value
+        for stmt in tree.body
+        if isinstance(stmt, ast.Assign)
+        for t in stmt.targets
+        if isinstance(t, ast.Name)
+    }
+    calls: list[CallSite] = []
+    truth = False
+    tables: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr in TRUTH_ATTRS:
+            truth = True
+        if isinstance(node, ast.Constant) and node.value in TABLES:
+            tables.add(str(node.value))
+        if not isinstance(node, ast.Call):
+            continue
+        args = list(node.args)
+        if _name(node.func) in LLM_ENTRY:
+            role_arg = args[0] if args else None
+        elif args and _name(args[0]) in LLM_ENTRY:
+            role_arg = args[1] if len(args) > 1 else None
+        else:
+            continue
+        keywords = {k.arg: k.value for k in node.keywords if k.arg}
+        role_arg = keywords.get("role", role_arg)
+        purpose = keywords.get("purpose")
+        text = purpose.value if isinstance(purpose, ast.Constant) else None
+        text = text if isinstance(text, str) else None
+        calls.append(CallSite(module, node.lineno, _role(role_arg, constants), text))
+    return ModuleUse(module, tuple(calls), truth, frozenset(tables))
+
+
+def owner(module: str, agents: Sequence[AgentManifest]) -> AgentManifest | None:
+    return next((a for a in agents if module in a.modules), None)
+
+
+def problems(uses: Iterable[ModuleUse], agents: Sequence[AgentManifest] = AGENTS) -> list[str]:
+    out = []
+    for use in uses:
+        if use.module in LLM_ADAPTERS:
+            continue
+        agent = owner(use.module, agents)
+        if agent is None:
+            out += [f"{c.module}:{c.line}: model call belongs to no agent" for c in use.calls]
+            continue
+        for c in use.calls:
+            if c.purpose not in agent.purposes:
+                out.append(f"{c.module}:{c.line}: {agent.name} uses purpose {c.purpose!r}")
+            if agent.role is None or c.role != agent.role.value:
+                out.append(f"{c.module}:{c.line}: {agent.name} uses role {c.role!r}")
+        if use.reads_truth and "truth" not in agent.layers:
+            out.append(f"{use.module}: {agent.name} reads the truth layer outside its manifest")
+        if use.reads_truth and agent.verified_by is None:
+            out.append(f"{use.module}: {agent.name} reads the truth layer with no verifier")
+    return out
+
+
+def report(
+    uses: Sequence[ModuleUse], agents: Sequence[AgentManifest] = AGENTS
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for agent in agents:
+        mine = [u for u in uses if u.module in agent.modules]
+        rows.append(
+            {
+                "agent": agent.name,
+                "role": agent.role.value if agent.role else None,
+                "tools": list(agent.tools),
+                "layers": sorted(agent.layers),
+                "sensitivity": agent.sensitivity,
+                "verified_by": agent.verified_by,
+                "planned": agent.planned,
+                "call_sites": [f"{c.module}:{c.line}" for u in mine for c in u.calls],
+                "reads_truth": any(u.reads_truth for u in mine),
+                "tables": sorted({t for u in mine for t in u.tables}),
+            }
+        )
+    return rows
+
+
+def main(argv: Sequence[str]) -> int:
+    uses = [scan_module(m, s) for m, s in sources()]
+    found = problems(uses)
+    rows = report(uses)
+    out = BACKEND.parent / "reports" / "agent-inventory.json"
+    out.parent.mkdir(exist_ok=True)
+    out.write_text(json.dumps({"agents": rows, "problems": found}, indent=2) + "\n")
+    for row in rows:
+        layers = ",".join(row["layers"]) or "-"
+        tools = ",".join(row["tools"]) or "-"
+        status = f"PLANNED {row['planned']}" if row["planned"] else "OK"
+        role = row["role"] or "-"
+        print(f"{row['agent']:<14} {role:<7} tools={tools:<4} layers={layers:<38} {status}")
+    for p in found:
+        print(f"FAIL {p}")
+    return 1 if found else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

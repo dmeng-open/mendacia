@@ -158,7 +158,7 @@ async def verify(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, objec
     result = verify_reply(seat.case, seat.suspect, last.claims, state.ledger, state.shown)
     permitted = state.permitted or PermittedClaims(facts=(), lies=())
     checks = tuple(bound(Check.of(c), permitted) for c in result.checks)
-    unchecked = not last.claims and mentions_case(seat.case, last.draft)
+    unchecked = narrates(last.draft) or (not last.claims and mentions_case(seat.case, last.draft))
     leaked = leaks_canary(seat.case, last.draft)
     attempt = last.model_copy(update={"checks": checks, "unchecked": unchecked, "leaked": leaked})
     reason = (
@@ -212,6 +212,10 @@ def mentions_case(case: Case, text: str) -> bool:
 
 
 _COMMON = frozenset({"the", "mr", "mrs", "dr", "lord", "lady", "miss", "of", "and"})
+
+
+def narrates(text: str) -> bool:
+    return len([p for p in re.split(r"\n\s*\n", text) if p.strip()]) > 1
 
 
 async def rewrite(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, object]:
