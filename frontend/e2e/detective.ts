@@ -60,7 +60,12 @@ export function detective(page: Page) {
       return page.url().split("/").at(-1) ?? "";
     },
 
-    async ask(suspect: string, question: string): Promise<AskResult> {
+    /** `whileStreaming` runs once the first chunk paints, if the reply streams long enough to see. */
+    async ask(
+      suspect: string,
+      question: string,
+      whileStreaming?: () => Promise<void>,
+    ): Promise<AskResult> {
       await show("Case");
       await page
         .getByRole("region", { name: "Suspects" })
@@ -73,6 +78,17 @@ export function detective(page: Page) {
       });
       await page.getByLabel("Your question").fill(question);
       await page.getByRole("button", { name: "Ask", exact: true }).click();
+      if (whileStreaming) {
+        const streaming = page.locator('[data-turn-phase="streaming"]');
+        if (
+          await streaming.waitFor({ timeout: 45_000 }).then(
+            () => true,
+            () => false,
+          )
+        ) {
+          await whileStreaming();
+        }
+      }
       await expect(page.locator("[data-turn-phase]")).toHaveCount(0, { timeout: 45_000 });
       await expect(transcript()).toHaveCount(before + 1);
       const reply = await transcript().last().locator(":scope > div").nth(1).innerText();
@@ -133,7 +149,11 @@ export function detective(page: Page) {
     },
 
     /** Accuses, waits for the reveal page, and returns the ruling. */
-    async accuse(suspect: string, clues: readonly string[] | "all"): Promise<string> {
+    async accuse(
+      suspect: string,
+      clues: readonly string[] | "all",
+      beforeConfirm?: () => Promise<void>,
+    ): Promise<string> {
       await show("Archive");
       await page.getByRole("button", { name: "Accuse" }).click();
       const dialog = page.getByRole("dialog");
@@ -143,6 +163,7 @@ export function detective(page: Page) {
         const label = (await box.locator("xpath=..").innerText()).trim();
         if (clues === "all" || clues.includes(label)) await box.check();
       }
+      await beforeConfirm?.();
       await dialog.getByRole("button", { name: "Accuse" }).click();
       await page.waitForURL(/\/reveal$/);
       const ruling = page.getByRole("region", { name: "Ruling" }).locator("p").first();
@@ -164,25 +185,34 @@ export interface Walked {
   readonly ruling: string | null;
 }
 
-/** Plays a walkthrough. `beforeAccuse` runs at the last moment before the accusation. */
+export interface WalkHooks {
+  /** Runs once a reply starts streaming. */
+  readonly whileStreaming?: (step: Step) => Promise<void>;
+  /** Runs in the accusation dialog, the last moment before the reveal. */
+  readonly beforeConfirm?: () => Promise<void>;
+  readonly afterStep?: (step: Step) => Promise<void>;
+}
+
 export async function walk(
   d: Detective,
   steps: readonly Step[],
-  beforeAccuse?: () => Promise<void>,
+  hooks: WalkHooks = {},
 ): Promise<Walked> {
-  const out: Walked = { asks: [], searches: [], ruling: null };
+  const asks: AskResult[] = [];
+  const searches: { titles: string[]; marks: number }[] = [];
   let ruling: string | null = null;
   for (const step of steps) {
-    if ("ask" in step) out.asks.push(await d.ask(step.ask.suspect, step.ask.question));
-    else if ("search" in step) out.searches.push(await d.search(step.search));
+    if ("ask" in step) {
+      const streaming =
+        hooks.whileStreaming && (() => hooks.whileStreaming?.(step) ?? Promise.resolve());
+      asks.push(await d.ask(step.ask.suspect, step.ask.question, streaming));
+    } else if ("search" in step) searches.push(await d.search(step.search));
     else if ("hint" in step) await d.hint();
     else if ("open" in step) await d.open(step.open);
-    else {
-      await beforeAccuse?.();
-      ruling = await d.accuse(step.accuse.suspect, step.accuse.clues);
-    }
+    else ruling = await d.accuse(step.accuse.suspect, step.accuse.clues, hooks.beforeConfirm);
+    await hooks.afterStep?.(step);
   }
-  return { ...out, ruling };
+  return { asks, searches, ruling };
 }
 
 export interface Traffic {

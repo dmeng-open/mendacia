@@ -8,11 +8,13 @@ for (const caseId of CASES) {
     const d = detective(page);
     await d.start(caseId);
     const screens: string[] = [];
-    const walked = await walk(d, WALKTHROUGHS[caseId], async () => {
-      screens.push(
-        await page.evaluate(() => document.body.innerText),
-        await page.evaluate(() => JSON.stringify(Object.entries(sessionStorage))),
-      );
+    const walked = await walk(d, WALKTHROUGHS[caseId], {
+      beforeConfirm: async () => {
+        screens.push(
+          await page.evaluate(() => document.body.innerText),
+          await page.evaluate(() => JSON.stringify(Object.entries(sessionStorage))),
+        );
+      },
     });
     expect(walked.ruling, "the walkthrough reached the accusation").not.toBeNull();
     expect(walked.asks.length).toBeGreaterThan(0);

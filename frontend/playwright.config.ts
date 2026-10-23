@@ -23,7 +23,7 @@ export default defineConfig({
       name: "desktop",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } },
     },
-    { name: "phone", use: { ...devices["Pixel 7"] }, testMatch: /full-game/ },
+    { name: "phone", use: { ...devices["Pixel 7"] }, testMatch: /full-game|verify/ },
   ],
   webServer: [
     {
