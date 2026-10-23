@@ -35,3 +35,13 @@ Default taken: once a game's `llm_calls` rows sum to 200,000 tokens, `ask_questi
 
 1. Keep the hard stop (the default).
 2. Count tokens in a sliding window (for example 200k per 10 minutes) so the cooldown can lift.
+
+## P3-5: live time to `done` p95 is bound by the three-draft rewrite path
+
+The plan's P3-5 perf rule fails when live time to `done` p95 exceeds 8 s. Ten live asks over the WebSocket measured median 3.8 s and p95 8.9 s (n=10, so p95 is the slowest ask). The two slowest asks, 8.9 s and 7.9 s, each ran the P2-2 rewrite loop to its limit: three drafts, so six sequential model calls of 0.7 to 2.6 s each. The eight asks with one draft took 2.2 to 6.3 s. Guard latency (`authorize`, the broker, and verification, summed from `security_events`) had p95 18.5 ms, so the HTTP layer adds almost nothing.
+
+Default taken: the code ships as is. Options for the operator:
+
+1. Judge the 8 s budget on turns that release a first draft, and track rewrite turns separately.
+2. Raise the budget to cover a full rewrite loop (for example 12 s).
+3. Cut the loop: fewer drafts, a faster extractor model, or fall back after one rewrite.
