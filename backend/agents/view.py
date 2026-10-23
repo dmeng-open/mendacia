@@ -20,6 +20,7 @@ class Exchange(Frozen):
     question: str
     shown: tuple[Id, ...]
     reply: str
+    handed: tuple[Id, ...] = ()
 
 
 class PublicCase(Frozen):

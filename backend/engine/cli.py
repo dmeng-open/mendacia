@@ -4,6 +4,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from engine.evidence import lint_case
 from engine.schema import Case, DanglingReferences
 from engine.solver import (
     Ambiguous,
@@ -50,6 +51,26 @@ def validate(paths: list[Path]) -> int:
                 print(f"  {problem}")
         else:
             print(f"OK {path}")
+    return 1 if failed else 0
+
+
+def lint_evidence(paths: list[Path]) -> int:
+    failed = False
+    print(f"{'case':<16}{'docs':>5}{'key':>5}{'locked':>8}  status")
+    for path in paths:
+        try:
+            lint = lint_case(load_case(path))
+        except ValidationError as error:
+            failed = True
+            print(f"{path.stem:<16}{'':>18}  FAIL")
+            for problem in _problems(error):
+                print(f"  {problem}")
+            continue
+        failed |= bool(lint.problems)
+        status = "FAIL" if lint.problems else "OK"
+        print(f"{lint.case_id:<16}{lint.docs:>5}{lint.key:>5}{lint.locked:>8}  {status}")
+        for problem in lint.problems:
+            print(f"  {problem}")
     return 1 if failed else 0
 
 
@@ -138,9 +159,13 @@ def main(argv: list[str] | None = None) -> int:
     validate_cmd.add_argument("paths", nargs="+", type=Path)
     check_cmd = commands.add_parser("check", help="prove the case has exactly one culprit")
     check_cmd.add_argument("path", type=Path)
+    lint_cmd = commands.add_parser("lint-evidence", help="lint each case's evidence archive")
+    lint_cmd.add_argument("paths", nargs="+", type=Path)
     args = parser.parse_args(argv)
     if args.command == "check":
         return check(args.path)
+    if args.command == "lint-evidence":
+        return lint_evidence(args.paths)
     return validate(args.paths)
 
 

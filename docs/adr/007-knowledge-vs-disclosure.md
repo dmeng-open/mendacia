@@ -22,7 +22,7 @@ A suspect often knows a fact it must not say yet. Hobbs knows Clara had the lett
 
 A fact outside `known_by` has no grant. Planned lies are not grants. A lie is authorized by the `tell_lie` rule below, from the lie's owner and the ledger.
 
-**Policy.** `authorize(subject, action, resource, context) -> Decision` returns `allow`, `deny`, or `transition_required`, with a `reason_code` and `POLICY_VERSION` (`p3-2.1`). It applies these checks in order:
+**Policy.** `authorize(subject, action, resource, context) -> Decision` returns `allow`, `deny`, or `transition_required`, with a `reason_code` and `POLICY_VERSION` (`p3-3.1`). It applies these checks in order:
 
 1. A resource from another case version is denied with `stale_case`.
 2. A context whose `state_version` differs from the subject's is denied with `stale_state`. `commit` authorizes at the version the view was built at. Within one process the per-suspect lock already serializes turns, so this check cannot fail there. Across processes it does not yet close the race: two `Interrogation`s on the same game can each commit turn 1, and one turn is lost. P3-5's transactional commit compares the stored `state_version` inside the transaction that writes the turn; until then this is a known gap.
@@ -36,10 +36,11 @@ Then the table decides. The code's `POLICY` dict is the source, and a test fails
 | `suspect` | `know_fact` | a grant names this suspect and fact |
 | `suspect` | `disclose_fact` | known, and the grant's disclosure rule holds: always, after one of its clues is shown, or never before the reveal |
 | `suspect` | `tell_lie` | the lie is the suspect's own and is not spent |
+| `player` | `open_document` | the document is open, or a clue or document that unlocks it is found |
 | `game_master` | `read_truth` | verification, scoring, and the reveal |
 | `game_master` | `commit_turn` | the version the turn was authorized at |
 
-Reason codes: `granted`, `not_granted`, `always`, `clue_shown`, `needs_clue` (`transition_required`), `never_before_reveal`, `planned_lie`, `lie_spent`, `not_owner`, `server_rule`, `stale_case`, `stale_state`, `unknown_action`, and `truth_layer`. A lie is spent when a shown clue reveals its hidden fact or the ledger marks it exposed or admitted.
+Reason codes: `granted`, `not_granted`, `always`, `clue_shown`, `needs_clue` (`transition_required`), `never_before_reveal`, `open`, `unlocked`, `locked`, `planned_lie`, `lie_spent`, `not_owner`, `server_rule`, `stale_case`, `stale_state`, `unknown_action`, and `truth_layer`. A lie is spent when a shown clue reveals its hidden fact or the ledger marks it exposed or admitted.
 
 **The view.** The turn's `retrieve` node builds a `SuspectView` only through `authorize`. It holds a public projection of the case (title, summary, people, places, items, and hours), the suspect's stateable facts, its own secrets split into hidden and proven, its planned lies with whether each is spent, the clues shown to it, and the history window. A culprit secret the suspect knows but may not disclose stays out of the view entirely. `suspect_brief` takes the view, not the `Case`. The view's types cannot reach `Case`, `Crime`, `culprit`, `crime`, or `solution_chain`, and a test walks the types to prove it. The rendered brief is byte-identical to the brief before this change for 115 recorded states across the three cases.
 

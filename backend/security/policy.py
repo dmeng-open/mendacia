@@ -2,15 +2,17 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Literal
 
-from engine.schema import Id
+from engine.schema import Id, Unlock, Visibility
 from security.context import ActorType, AuthContext
 from security.grants import AfterClue, Always, KnowledgeGrant, NeverBeforeReveal
 
-POLICY_VERSION = "p3-2.1"
+POLICY_VERSION = "p3-3.1"
 
-Action = Literal["know_fact", "disclose_fact", "tell_lie", "read_truth", "commit_turn"]
+Action = Literal[
+    "know_fact", "disclose_fact", "tell_lie", "read_truth", "commit_turn", "open_document"
+]
 Effect = Literal["allow", "deny", "transition_required"]
-ResourceType = Literal["fact", "lie", "truth", "turn"]
+ResourceType = Literal["fact", "lie", "truth", "turn", "document"]
 Layer = Literal["truth", "knowledge", "player", "conversation"]
 
 
@@ -22,6 +24,7 @@ class Resource:
     classification: Layer
     owner: Id | None = None
     grant: KnowledgeGrant | None = None
+    visibility: Visibility | None = None
 
 
 @dataclass(frozen=True)
@@ -84,6 +87,15 @@ def _tell_lie(subject: AuthContext, resource: Resource, ctx: PolicyContext) -> D
     return deny("lie_spent") if resource.id in ctx.spent else allow("planned_lie")
 
 
+def _open_document(subject: AuthContext, resource: Resource, ctx: PolicyContext) -> Decision:
+    visibility = resource.visibility
+    if resource.type == "document" and visibility == "open":
+        return allow("open")
+    if isinstance(visibility, Unlock) and ctx.unlocks & set(visibility.unlocked_by):
+        return allow("unlocked")
+    return deny("locked")
+
+
 def _game_master(subject: AuthContext, resource: Resource, ctx: PolicyContext) -> Decision:
     return allow("server_rule")
 
@@ -96,6 +108,10 @@ POLICY: dict[tuple[ActorType, Action], tuple[str, Rule]] = {
         _disclose,
     ),
     ("suspect", "tell_lie"): ("the lie is the suspect's own and is not spent", _tell_lie),
+    ("player", "open_document"): (
+        "the document is open, or a clue or document that unlocks it is found",
+        _open_document,
+    ),
     ("game_master", "read_truth"): ("verification, scoring, and the reveal", _game_master),
     ("game_master", "commit_turn"): ("the version the turn was authorized at", _game_master),
 }
