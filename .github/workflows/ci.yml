@@ -31,6 +31,20 @@ jobs:
       - run: make doctor SKIP_MODEL=1
       - run: make ci
 
+  instructions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make scan-instructions
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: make setup
+      - run: make audit
+
   compose-smoke:
     runs-on: ubuntu-latest
     steps:
