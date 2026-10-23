@@ -169,20 +169,26 @@
     {
       "id": "cctv_log",
       "title": "East hall camera log",
+      "source": "cctv_log",
       "body": "Camera E2. 18:58 visitor enters. 19:00 to 19:12 visitor (female, grey coat, identified as Lady Wren) stands at catalogue no. 14. 19:13 visitor exits north.",
-      "is_key": true
+      "is_key": true,
+      "visibility": "open"
     },
     {
       "id": "vault_door_log",
       "title": "Vault door access log",
+      "source": "keycard_log",
       "body": "18:02 card 19 (S. Okafor) lock. 19:04 card 19 (S. Okafor) unlock. 19:09 card 19 (S. Okafor) lock.",
-      "is_key": false
+      "is_key": false,
+      "visibility": "open"
     },
     {
       "id": "refund_demand",
       "title": "Letter from the curator to Lady Wren",
+      "source": "letter",
       "body": "Lady Wren, catalogue no. 14 is not what you sold us. The gallery requires the full price returned by Friday, or I go to the police.",
-      "is_key": false
+      "is_key": false,
+      "visibility": "open"
     }
   ],
   "solution_chain": ["theo_cafe_testimony", "pia_saw_theo_testimony", "cctv_east_hall"],

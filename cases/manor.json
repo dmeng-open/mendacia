@@ -166,26 +166,34 @@
     {
       "id": "pavilion_visitors_book",
       "title": "Garden pavilion visitors' book",
+      "source": "visitors_book",
       "body": "Saturday. 9:55pm, Dr. A. Finch, in. 10:40pm, Dr. A. Finch, out. Remarks: lamp left burning.",
-      "is_key": true
+      "is_key": true,
+      "visibility": "open"
     },
     {
       "id": "clara_diary_page",
       "title": "Torn diary page",
+      "source": "diary",
       "body": "He will not listen. At ten I am going to the study to have it out with him, whatever it costs me.",
-      "is_key": false
+      "is_key": false,
+      "visibility": "open"
     },
     {
       "id": "opener_case_note",
       "title": "Housekeeper's note on the letter opener case",
+      "source": "staff_note",
       "body": "Found the velvet case for His Lordship's silver letter opener in Miss Clara's dressing table, empty.",
-      "is_key": false
+      "is_key": false,
+      "visibility": "open"
     },
     {
       "id": "ashcombe_ledger",
       "title": "Page from Lord Ashcombe's ledger",
+      "source": "ledger",
       "body": "Loan to Dr. A. Finch, two thousand pounds, due at Michaelmas. Not repaid. Raise this with him on Saturday.",
-      "is_key": false
+      "is_key": false,
+      "visibility": "open"
     }
   ],
   "solution_chain": ["pike_kitchen_testimony", "pike_saw_hobbs_testimony", "pavilion_book"],

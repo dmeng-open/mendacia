@@ -182,14 +182,18 @@
     {
       "id": "boathouse_ledger_page",
       "title": "Boathouse ledger",
+      "source": "ledger",
       "body": "Crates in, Thursday. 9:05pm, one crate, no markings, received J.P. Storm rising, tide high at ten.",
-      "is_key": true
+      "is_key": true,
+      "visibility": "open"
     },
     {
       "id": "lamp_room_log",
       "title": "Lamp room log",
+      "source": "logbook",
       "body": "21:00. Lens turned and checked, mechanism sound. Inspection passed. Signed, H. Quill, harbour board.",
-      "is_key": false
+      "is_key": false,
+      "visibility": "open"
     }
   ],
   "solution_chain": ["nell_jetty_testimony", "ada_saw_nell_testimony", "boathouse_ledger"],
