@@ -145,7 +145,13 @@ describe("parseHighlight", () => {
         { text: "case", marked: true },
       ],
     ],
-    ["[[<b>]] stays text", [{ text: "<b>", marked: true }, { text: " stays text", marked: false }]],
+    [
+      "[[<b>]] stays text",
+      [
+        { text: "<b>", marked: true },
+        { text: " stays text", marked: false },
+      ],
+    ],
     ["broken [[marker", [{ text: "broken [[marker", marked: false }]],
   ])("%s", (raw, spans) => {
     expect(parseHighlight(raw)).toEqual(spans);
@@ -248,14 +254,25 @@ describe("ask channel", () => {
   });
 
   it("ends the turn with exactly one done when the socket drops twice", async () => {
-    const api = socketApi([(s) => s.drop(), (s) => s.drop()]);
+    const api = socketApi([
+      (s) => {
+        s.drop();
+      },
+      (s) => {
+        s.drop();
+      },
+    ]);
     const frames = await runTurn(api);
     expect(frames).toHaveLength(1);
     expect(frames[0]).toMatchObject({ type: "done", code: "network" });
   });
 
   it("maps a 4403 close to denied", async () => {
-    const api = socketApi([(s) => s.drop(4403)]);
+    const api = socketApi([
+      (s) => {
+        s.drop(4403);
+      },
+    ]);
     expect(await runTurn(api)).toMatchObject([{ type: "done", code: "denied" }]);
   });
 

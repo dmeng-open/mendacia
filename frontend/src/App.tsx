@@ -106,7 +106,7 @@ function PlayPage() {
           ))}
         </TabsList>
       </Tabs>
-      <main className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)]">
+      <main className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)]">
         <div className={shown("Case")}>
           <CasePanel
             gameId={gameId}

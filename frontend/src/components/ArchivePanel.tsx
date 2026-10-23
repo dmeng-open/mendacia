@@ -33,6 +33,7 @@ export function ArchivePanel({ gameId }: { gameId: GameId }) {
           }}
         >
           <Input
+            type="search"
             aria-label="Search the archive"
             placeholder="Search the archive"
             value={query}
