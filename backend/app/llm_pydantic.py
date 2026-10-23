@@ -35,6 +35,7 @@ class CompleteModel(Model):
         purpose: str,
         game_id: str | None = None,
         max_tokens: int | None = None,
+        prompt_version: str | None = None,
     ) -> None:
         super().__init__(profile=_PROFILE)
         self._role = role
@@ -42,6 +43,7 @@ class CompleteModel(Model):
         self._purpose = purpose
         self._game_id = game_id
         self._max_tokens = max_tokens
+        self._prompt_version = prompt_version
 
     @property
     def model_name(self) -> str:
@@ -68,6 +70,7 @@ class CompleteModel(Model):
             purpose=self._purpose,
             game_id=self._game_id,
             max_tokens=self._max_tokens,
+            prompt_version=self._prompt_version,
         )
         return ModelResponse(
             parts=[TextPart(out.text)],

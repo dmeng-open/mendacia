@@ -11,6 +11,7 @@ from agents.claims import Claim, contradicts
 from agents.events import Rule, log_event
 from agents.ledger import Ledger, LedgerEntry, LieStatus, Transition
 from engine.schema import Case, Fact, Id, PlannedLie, Statement
+from security.context import canary
 
 UNKNOWN = "leave this claim out; it is not something you know or planned to say"
 
@@ -69,6 +70,10 @@ class VerifyResult:
         if not self.passed:
             raise BlockedReply(self.feedback())
         return self.ledger.apply(self.transitions, turn)
+
+
+def leaks_canary(case: Case, text: str) -> bool:
+    return canary(case).lower() in text.lower()
 
 
 def exposed_facts(case: Case, presented_clue_ids: Collection[Id]) -> frozenset[Id]:

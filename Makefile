@@ -2,7 +2,7 @@ ENV_FILE := $(if $(wildcard .env),.env,.env.example)
 ENV_NAMES := $(shell sed -n 's/^\([A-Z_]*\)=.*/\1/p' $(ENV_FILE))
 $(foreach v,$(ENV_NAMES),$(if $(filter environment,$(origin $(v))),,$(eval export $(v) := $(shell sed -n 's/^$(v)=//p' $(ENV_FILE)))))
 
-.PHONY: setup up db-create migrate api test lint typecheck ci doctor validate-cases check-case record-fixtures play-cli scan-instructions audit
+.PHONY: setup up db-create migrate api test lint typecheck ci doctor validate-cases check-case record-fixtures play-cli scan-instructions audit agent-inventory security-regress
 
 setup:
 	cd backend && uv sync --frozen
@@ -29,9 +29,15 @@ lint:
 	cd backend && uv run ruff check . && uv run ruff format --check .
 
 typecheck:
-	cd backend && uv run mypy agents app engine migrations tests
+	cd backend && uv run mypy agents app engine evals migrations security tests
 
-ci: lint typecheck scan-instructions test
+ci: lint typecheck scan-instructions agent-inventory test security-regress
+
+agent-inventory:
+	cd backend && uv run python -m agents.inventory
+
+security-regress:
+	cd backend && LLM_MODE=$(if $(RECORD),record,replay) uv run python -m evals.security_regress
 
 scan-instructions:
 	python3 scripts/scan_instructions.py

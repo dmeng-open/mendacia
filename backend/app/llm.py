@@ -27,6 +27,7 @@ LLM_CALLS = sa.Table(
     sa.Column("cost_usd", sa.Double),
     sa.Column("latency_ms", sa.Integer),
     sa.Column("mode", sa.Text),
+    sa.Column("prompt_version", sa.Text),
 )
 
 
@@ -91,6 +92,7 @@ def _run(
     game_id: str | None,
     live_call: Callable[[str, dict[str, Any]], tuple[Any, float]],
     to_output: Callable[[Any], str | list[list[float]]],
+    prompt_version: str | None = None,
 ) -> Recording:
     key = llm_replay.request_key(role, request)
     mode = settings.llm_mode
@@ -128,6 +130,7 @@ def _run(
                 cost_usd=recording.cost_usd,
                 latency_ms=recording.latency_ms,
                 mode=mode.value,
+                prompt_version=prompt_version,
             )
         )
     return recording
@@ -141,6 +144,7 @@ def complete(
     purpose: str,
     game_id: str | None = None,
     max_tokens: int | None = None,
+    prompt_version: str | None = None,
 ) -> Completion:
     request = {
         "messages": messages,
@@ -163,7 +167,9 @@ def complete(
     def to_output(response: Any) -> str:
         return str(response.choices[0].message.content or "")
 
-    recording = _run(Settings(), role, request, purpose, game_id, live_call, to_output)
+    recording = _run(
+        Settings(), role, request, purpose, game_id, live_call, to_output, prompt_version
+    )
     assert isinstance(recording.output, str)
     return Completion(
         text=recording.output,
