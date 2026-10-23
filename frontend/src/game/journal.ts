@@ -2,12 +2,10 @@ import { useCallback, useSyncExternalStore } from "react";
 import type { Clue, GameId, Suspect } from "@/api";
 import type { Exchange } from "./turn";
 
-/** What the client remembers that the server view does not carry. */
 export interface Journal {
   readonly schema: 1;
   readonly exchanges: readonly Exchange[];
   readonly hints: readonly string[];
-  /** The reveal sends raw ids only, so the accusation is kept to show names and clue text. */
   readonly accusation: { readonly suspect: Suspect; readonly cited: readonly Clue[] } | null;
 }
 
@@ -61,7 +59,6 @@ function current(gameId: GameId): Journal {
   return journal;
 }
 
-/** The single writer. Kept per tab in sessionStorage, like the session cookie it belongs to. */
 export function record(gameId: GameId, event: JournalEvent): void {
   const next = applyJournal(current(gameId), event);
   journals.set(gameId, next);

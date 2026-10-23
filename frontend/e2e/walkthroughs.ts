@@ -1,11 +1,3 @@
-/**
- * One replayable script per case. Replay matches recorded model calls by request, so the asks
- * must be the recorded questions in the recorded order: manor follows
- * backend/tests/api/test_games.py, gallery follows
- * backend/tests/fixtures/games/gallery_locked_docs.txt (its documents are opened before the
- * asks), and lighthouse has one ask recorded for this suite. Searches use queries from
- * backend/evals/retrieval_queries.yaml, whose query embeddings are recorded.
- */
 export type Step =
   | { readonly ask: { readonly suspect: string; readonly question: string } }
   | { readonly search: string }

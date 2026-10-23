@@ -36,7 +36,6 @@ function announce(problem: Problem): void {
 
 export interface GameHandle {
   readonly view: GameView;
-  /** Runs one action at the cached state_version, replaces the cached view, toasts problems. */
   readonly perform: <A extends Action>(action: A) => Promise<Outcome<ValueOf<A>>>;
   readonly busy: boolean;
 }
@@ -79,7 +78,6 @@ export function useGame(gameId: GameId): GameHandle {
 
 export interface AskHandle {
   readonly turn: Turn;
-  /** Ignored unless the turn is idle. */
   readonly ask: (request: AskRequest) => void;
 }
 

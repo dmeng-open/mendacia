@@ -37,7 +37,6 @@ interface Sent {
   body: unknown;
 }
 
-/** A fake server: each request is answered by the next handler in order. */
 function server(...handlers: ((sent: Sent) => Response | Error)[]) {
   const sent: Sent[] = [];
   const fetch = async (input: RequestInfo | URL): Promise<Response> => {

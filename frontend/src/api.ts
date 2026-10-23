@@ -7,17 +7,13 @@ declare const brand: unique symbol;
 type Brand<T, B extends string> = T & { readonly [brand]: B };
 
 export type GameId = Brand<string, "GameId">;
-/** Per-game handle `h_xxxxxxxxxx`, never a raw suspect id. */
 export type SuspectId = Brand<string, "SuspectId">;
-/** Per-game handle `h_xxxxxxxxxx`, never a raw clue id. */
 export type ClueId = Brand<string, "ClueId">;
 export type DocumentId = Brand<string, "DocumentId">;
 export type CaseId = Brand<string, "CaseId">;
-/** 8 to 64 characters. One per player intent, reused on every retry of that intent. */
 export type IdempotencyKey = Brand<string, "IdempotencyKey">;
 
 export type ReasonCode = Wire["Problem"]["code"];
-/** `network` is client-only: the request may or may not have landed. */
 export type ProblemCode = ReasonCode | "network";
 
 export interface Problem {
@@ -26,10 +22,6 @@ export interface Problem {
   readonly retryAfterS: number | null;
 }
 
-/**
- * Player-safe text per code. WebSocket `done` frames carry a code but no message. The Record is
- * exhaustive, so a new backend ReasonCode fails tsc here until it gets a line.
- */
 export const PLAYER_MESSAGES: Readonly<Record<ProblemCode, string>> = {
   bad_request: "That request is malformed.",
   denied: "That is not your game.",
@@ -68,7 +60,6 @@ export interface DocumentBody {
   readonly body: string;
 }
 
-/** Everything the player may know. Replaced whole on every change, never patched. */
 export interface GameView {
   readonly gameId: GameId;
   readonly title: string;
@@ -88,7 +79,6 @@ export interface HighlightSpan {
   readonly marked: boolean;
 }
 
-/** `score` is dropped here: the order of hits is shown, the ranking is not. */
 export interface SearchHit {
   readonly document: DocumentId;
   readonly title: string;
@@ -96,7 +86,6 @@ export interface SearchHit {
   readonly highlight: readonly HighlightSpan[];
 }
 
-/** Raw ids, as the backend sends them after the accusation. The UI never renders them. */
 export interface Reveal {
   readonly ruling: string;
   readonly correct: boolean;
@@ -121,7 +110,6 @@ export type Outcome<T> =
   | { readonly ok: true; readonly view: GameView; readonly value: T; readonly replayed: boolean }
   | { readonly ok: false; readonly problem: Problem };
 
-/** A confrontation when `present` or `documents` is non-empty. */
 export interface AskRequest {
   readonly suspect: SuspectId;
   readonly question: string;
@@ -139,7 +127,6 @@ export type DoneFrame = {
   readonly retryAfterS: number | null;
 };
 
-/** One turn's frames. AskChannel.turn always ends with exactly one `done`. */
 export type TurnFrame =
   | { readonly type: "thinking" }
   | { readonly type: "validating" }
@@ -147,16 +134,10 @@ export type TurnFrame =
   | DoneFrame;
 
 export interface AskChannel {
-  /**
-   * Sends one turn and yields its frames, ending with exactly one `done`. The key is minted once:
-   * a `stale_state` turn is resent at the fresh version, and a socket lost mid-turn is reopened
-   * and the turn resent, each at most once, so the server replays rather than spends twice.
-   */
   turn(request: AskRequest, stateVersion: number): AsyncIterable<TurnFrame>;
   close(): void;
 }
 
-/** Thrown by the read verbs; loaders and error boundaries catch it. */
 export class GameProblem extends Error {
   constructor(readonly problem: Problem) {
     super(problem.message);
@@ -183,7 +164,6 @@ export function parseProblem(body: unknown): Problem {
   };
 }
 
-/** ts_headline marks matches with `[[` and `]]`; they become spans, never HTML. */
 export function parseHighlight(raw: string): HighlightSpan[] {
   const spans: HighlightSpan[] = [];
   let rest = raw;
@@ -299,7 +279,6 @@ type SocketEvent =
   | { readonly kind: "message"; readonly data: string }
   | { readonly kind: "close"; readonly code: number };
 
-/** A WebSocket as a pull queue, so one turn reads it as a plain loop. */
 class Socket {
   private readonly events: SocketEvent[] = [];
   private waiting: ((e: SocketEvent) => void) | null = null;
@@ -345,7 +324,6 @@ function defaultAskUrl(gameId: GameId): string {
   return `${scheme}://${location.host}/games/${gameId}/ask`;
 }
 
-/** The whole wire protocol behind six verbs. Callers never see a key, header, status, or frame. */
 export function createApi(options: ApiOptions = {}) {
   const client = createClient<paths>({
     baseUrl: options.baseUrl ?? "",
@@ -487,10 +465,8 @@ export function createApi(options: ApiOptions = {}) {
           } catch {
             s.ws.close();
             socket = null;
-            {
-              yield doneWith("unavailable");
-              return;
-            }
+            yield doneWith("unavailable");
+            return;
           }
           if (frame.type === "done" && frame.code === "stale_state" && !staleRetried) {
             staleRetried = true;
@@ -549,11 +525,6 @@ export function createApi(options: ApiOptions = {}) {
       }));
     },
 
-    /**
-     * Never rejects. Mints one key for this intent; on `stale_state` refetches the version and
-     * resends with the same key once. The backend checks a stored key before the version, so the
-     * resend can replay but never spend twice.
-     */
     async perform<A extends Action>(
       gameId: GameId,
       action: A,

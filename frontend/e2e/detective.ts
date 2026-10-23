@@ -3,15 +3,14 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, type Page } from "@playwright/test";
+import { FIRST_CHUNK } from "../src/game/marks";
 import type { Step } from "./walkthroughs";
 
 type Panel = "Case" | "Chat" | "Archive";
 
 export interface AskResult {
   readonly reply: string;
-  /** Every turn phase the chat painted, in order. */
   readonly phases: readonly string[];
-  /** Ask to first painted chunk, from the `ask:first-chunk` measure ChatPanel records. */
   readonly firstChunkMs: number | null;
 }
 
@@ -21,7 +20,6 @@ declare global {
   }
 }
 
-/** Records each `data-turn-phase` the page paints, so a phase that lasts one frame is still seen. */
 function watchPhases() {
   window.__turnPhases = [];
   const seen = () => {
@@ -37,7 +35,6 @@ function watchPhases() {
   });
 }
 
-/** Player verbs by role and accessible name. Works at desktop and phone widths. */
 export function detective(page: Page) {
   void page.addInitScript(watchPhases);
 
@@ -52,7 +49,6 @@ export function detective(page: Page) {
     page,
     show,
 
-    /** Opens `/?case=<id>` and waits for the case. Returns the game id. */
     async start(caseId: string): Promise<string> {
       await page.goto(`/?case=${caseId}`);
       await page.waitForURL(/\/play\/[^/]+$/);
@@ -60,7 +56,6 @@ export function detective(page: Page) {
       return page.url().split("/").at(-1) ?? "";
     },
 
-    /** `whileStreaming` runs once the first chunk paints, if the reply streams long enough to see. */
     async ask(
       suspect: string,
       question: string,
@@ -92,15 +87,16 @@ export function detective(page: Page) {
       await expect(page.locator("[data-turn-phase]")).toHaveCount(0, { timeout: 45_000 });
       await expect(transcript()).toHaveCount(before + 1);
       const reply = await transcript().last().locator(":scope > div").nth(1).innerText();
-      const { phases, firstChunkMs } = await page.evaluate(() => ({
-        phases: window.__turnPhases,
-        firstChunkMs:
-          performance.getEntriesByName("ask:first-chunk", "measure").at(-1)?.duration ?? null,
-      }));
+      const { phases, firstChunkMs } = await page.evaluate(
+        (mark) => ({
+          phases: window.__turnPhases,
+          firstChunkMs: performance.getEntriesByName(mark, "measure").at(-1)?.duration ?? null,
+        }),
+        FIRST_CHUNK,
+      );
       return { reply, phases, firstChunkMs };
     },
 
-    /** Returns the hit titles and how many passages carry a highlight. */
     async search(query: string): Promise<{ titles: string[]; marks: number }> {
       await show("Archive");
       await page.getByRole("searchbox", { name: "Search the archive" }).fill(query);
@@ -111,7 +107,6 @@ export function detective(page: Page) {
       return { titles, marks: await results.locator("mark").count() };
     },
 
-    /** Opens or rereads a visible document and returns its body. */
     async open(title: string): Promise<string> {
       await show("Archive");
       const docs = page.getByRole("region", { name: "Documents" });
@@ -148,7 +143,6 @@ export function detective(page: Page) {
         .allInnerTexts();
     },
 
-    /** Accuses, waits for the reveal page, and returns the ruling. */
     async accuse(
       suspect: string,
       clues: readonly string[] | "all",
@@ -186,9 +180,7 @@ export interface Walked {
 }
 
 export interface WalkHooks {
-  /** Runs once a reply starts streaming. */
   readonly whileStreaming?: (step: Step) => Promise<void>;
-  /** Runs in the accusation dialog, the last moment before the reveal. */
   readonly beforeConfirm?: () => Promise<void>;
   readonly afterStep?: (step: Step) => Promise<void>;
 }
@@ -216,7 +208,6 @@ export async function walk(
 }
 
 export interface Traffic {
-  /** Every `/games/` response body and every WebSocket frame sent before the first /reveal request. */
   bodies(): Promise<string[]>;
 }
 
@@ -255,7 +246,6 @@ case = Case.model_validate_json((ROOT / "cases" / f"{sys.argv[1]}.json").read_te
 print(json.dumps(leaked(case, json.load(open(sys.argv[2])))))
 `;
 
-/** The backend's own leak matcher (tests/api/conftest.py), so there is one forbidden-token list. */
 export function leaked(caseId: string, bodies: readonly string[]): [string, string][] {
   const file = join(mkdtempSync(join(tmpdir(), "mendacia-leak-")), "bodies.json");
   writeFileSync(file, JSON.stringify(bodies));

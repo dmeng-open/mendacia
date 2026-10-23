@@ -10,7 +10,6 @@ import {
   type TurnFrame,
 } from "@/api";
 
-/** The live ask. `idle` is the only phase in which the composer is enabled. */
 export type Turn =
   | { readonly phase: "idle" }
   | { readonly phase: "sending"; readonly request: AskRequest }
@@ -24,7 +23,6 @@ export type TurnInput = { readonly type: "sent"; readonly request: AskRequest } 
 
 export const IDLE: Turn = { phase: "idle" };
 
-/** A frame that cannot occur in a phase is ignored, never thrown on. */
 export function step(turn: Turn, input: TurnInput): Turn {
   if (input.type === "done") return IDLE;
   if (turn.phase === "idle") {
@@ -49,7 +47,6 @@ export function step(turn: Turn, input: TurnInput): Turn {
 
 export type Reply =
   | { readonly kind: "answer"; readonly text: string; readonly newClues: readonly Clue[] }
-  /** No question was spent. `text` is the in-character line when the server sent one. */
   | { readonly kind: "refused"; readonly code: ProblemCode; readonly text: string };
 
 export interface Exchange {

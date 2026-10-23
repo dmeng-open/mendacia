@@ -4,10 +4,6 @@ import { expect, test } from "@playwright/test";
 import { detective, walk } from "./detective";
 import { CASES, WALKTHROUGHS, type CaseName, type Step } from "./walkthroughs";
 
-/**
- * The driver behind .claude/skills/verify: plays one case against a running app and saves
- * screenshots. Skipped unless VERIFY_CASE is set, so the e2e suite never runs it.
- */
 const caseId = process.env.VERIFY_CASE as CaseName | undefined;
 
 test("verify: play a case and capture evidence", async ({ page }, info) => {
@@ -28,8 +24,6 @@ test("verify: play a case and capture evidence", async ({ page }, info) => {
 
   const delay = Number(process.env.VERIFY_FRAME_DELAY_MS ?? "0");
   if (delay > 0) {
-    // Replayed replies stream faster than a frame paints; spacing the real frames out lets the
-    // screenshot catch the streaming state. The frames themselves are unchanged.
     await page.routeWebSocket(/\/ask$/, (ws) => {
       const server = ws.connectToServer();
       let queue = Promise.resolve();

@@ -30,7 +30,6 @@ function done(fields: Partial<DoneFrame>): DoneFrame {
   };
 }
 
-/** Drives the reducer the way useAsk does and returns every phase plus the settled exchange. */
 function play(frames: readonly TurnFrame[]): { phases: Turn["phase"][]; exchange: Exchange } {
   let turn = step(IDLE, { type: "sent", request });
   const phases: Turn["phase"][] = [turn.phase];

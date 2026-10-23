@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { MAX_QUESTION, type ClueId, type DocumentId, type GameId, type SuspectId } from "@/api";
 import { useAsk, useGame } from "@/game/hooks";
 import { useJournal } from "@/game/journal";
+import { ASK_SENT, FIRST_CHUNK } from "@/game/marks";
 import type { Exchange, Turn } from "@/game/turn";
 import { cn } from "@/lib/utils";
 import { Badge } from "./ui/badge";
@@ -29,7 +30,7 @@ export function ChatPanel({ gameId, suspect }: { gameId: GameId; suspect: Suspec
   function submit(e: { preventDefault: () => void }) {
     e.preventDefault();
     if (!who || !canAsk) return;
-    performance.mark("ask:sent");
+    performance.mark(ASK_SENT);
     ask({ suspect: who.id, question: question.trim(), present, documents });
     setQuestion("");
     setPresent([]);
@@ -194,14 +195,13 @@ function flip<T>(list: readonly T[], item: T): readonly T[] {
   return list.includes(item) ? list.filter((x) => x !== item) : [...list, item];
 }
 
-/** e2e reads the `ask:first-chunk` measure: time from Ask to the first painted chunk. */
 function useFirstChunkMark(turn: Turn) {
   const marked = useRef(false);
   useEffect(() => {
     if (turn.phase === "streaming" && !marked.current) {
       marked.current = true;
-      performance.mark("ask:first-chunk");
-      performance.measure("ask:first-chunk", "ask:sent", "ask:first-chunk");
+      performance.mark(FIRST_CHUNK);
+      performance.measure(FIRST_CHUNK, ASK_SENT, FIRST_CHUNK);
     } else if (turn.phase === "idle") {
       marked.current = false;
     }
