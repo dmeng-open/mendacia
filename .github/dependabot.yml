@@ -10,7 +10,16 @@ updates:
       interval: weekly
     cooldown:
       default-days: 14
+    ignore:
+      # typescript-eslint 8 supports TypeScript < 6.1 (ADR 017).
+      - dependency-name: typescript
+        versions: [">=6.1.0"]
+      # The types follow the Node major in frontend/.nvmrc.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14
