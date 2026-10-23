@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel, ConfigDict
 
+from agents.state import Talk
 from agents.verifier import Verdict
 from engine.evidence import obtainable, visible_documents
 from engine.schema import Case, EvidenceDoc, Id, Unlock
@@ -15,6 +16,16 @@ MIN_CHAIN_CLUES = 2
 TELLING = frozenset({Verdict.KNOWN_TRUE, Verdict.ADMISSION})
 
 
+class Accusation(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    suspect: Id
+    cited: tuple[Id, ...]
+    chain_cited: tuple[Id, ...]
+    correct: bool
+    text: str
+
+
 class GameState(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -25,6 +36,8 @@ class GameState(BaseModel):
     discovered: tuple[Id, ...] = ()
     opened: tuple[Id, ...] = ()
     stated_facts: tuple[Id, ...] = ()
+    talks: dict[Id, Talk] = {}
+    accusation: Accusation | None = None
 
     def visible(self, case: Case) -> tuple[EvidenceDoc, ...]:
         return visible_documents(case, self.discovered, self.opened)
@@ -102,11 +115,15 @@ def next_hint(case: Case, state: GameState) -> tuple[GameState, Hint | NoHint]:
     missing = [c for c in case.solution_chain if c not in state.discovered]
     if not missing:
         return state, NoHint("You already hold every clue you need. Make your accusation.")
+    spent = state.model_copy(update={"hints_left": state.hints_left - 1})
+    chain_in = {c.doc_id: c.id for c in case.clues if c.id in missing and c.doc_id}
+    for doc in state.visible(case):
+        if doc.is_key and doc.id not in state.opened and doc.id in chain_in:
+            return spent, Hint(chain_in[doc.id], f"Read {doc.title} (/read {doc.id}).")
     reachable = obtainable(case)
     for clue_id in missing:
         text = _lead(case, state, clue_id, reachable, set())
         if text is not None:
-            spent = state.model_copy(update={"hints_left": state.hints_left - 1})
             return spent, Hint(clue_id, text)
     return state, NoHint("You have no lead on that yet.")
 

@@ -4,6 +4,7 @@ from typing import Literal
 import sqlalchemy as sa
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.config import Settings
 from app.db import sync_engine
@@ -102,9 +103,18 @@ def audit_row(
     )
 
 
-def log_decisions(rows: Sequence[AuditRow]) -> None:
+def _values(rows: Sequence[AuditRow]) -> list[dict[str, object]]:
     if any(CANARY_PREFIX.lower() in r.model_dump_json().lower() for r in rows):
         raise CanaryInRow("security_events rows never hold the canary")
-    if rows:
+    return [r.model_dump(mode="json") for r in rows]
+
+
+def log_decisions(rows: Sequence[AuditRow]) -> None:
+    if values := _values(rows):
         with sync_engine(Settings().database_url).begin() as conn:
-            conn.execute(sa.insert(SECURITY_EVENTS), [r.model_dump(mode="json") for r in rows])
+            conn.execute(sa.insert(SECURITY_EVENTS), values)
+
+
+async def insert_rows(conn: AsyncConnection, rows: Sequence[AuditRow]) -> None:
+    if values := _values(rows):
+        await conn.execute(sa.insert(SECURITY_EVENTS), values)

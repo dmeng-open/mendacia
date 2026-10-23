@@ -23,4 +23,5 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = Field(
         default=None, validation_alias="MENDACIA_OPENAI_API_KEY"
     )
+    session_secret: SecretStr | None = Field(default=None, validation_alias="SESSION_SECRET")
     llm_mode: LlmMode = Field(default=LlmMode.LIVE, validation_alias="LLM_MODE")
