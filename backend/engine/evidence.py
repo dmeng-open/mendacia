@@ -7,14 +7,19 @@ from functools import cache
 from pathlib import Path
 from types import ModuleType
 
+from agents.documents import invisible, plain
 from agents.screening import screen_input
 from engine.schema import Case, EvidenceDoc, Id, Unlock
 
 MIN_DOCS = 15
 MAX_DOCS = 20
 SCANNER = Path(__file__).resolve().parents[2] / "scripts" / "scan_instructions.py"
-ROLE_MARKER = re.compile(r"^\s*(system|assistant|user|developer)\s*:", re.IGNORECASE)
-MODEL_MARKER = re.compile(r"<\||\[/?INST\]", re.IGNORECASE)
+ROLE_MARKER = re.compile(
+    r"^\s*(system|assistant|user|developer|human|model|ai|bot)\s*:", re.IGNORECASE
+)
+MODEL_MARKER = re.compile(
+    r"<\||\[/?INST\]|<\s*/?\s*(system|assistant|user|start_of_turn|end_of_turn)\b", re.IGNORECASE
+)
 
 
 @dataclass(frozen=True)
@@ -70,7 +75,12 @@ def _text_problems(doc: EvidenceDoc) -> list[str]:
             f"{f.rule}: {where} line {f.line}: {f.detail}"
             for f in scanner.scan_text(where, text, hosts)
         ]
-        for number, line in enumerate(text.splitlines(), start=1):
+        hidden = sorted({f"U+{ord(ch):04X}" for ch in text if invisible(ch)})
+        if hidden:
+            problems.append(f"invisible_unicode: {where}: {', '.join(hidden)}")
+        if (whole := screen_input(text)).rule is not None:
+            problems.append(f"model_instruction: {where}: {whole.rule.value} '{whole.matched}'")
+        for number, line in enumerate(plain(text).splitlines(), start=1):
             if ROLE_MARKER.match(line) or MODEL_MARKER.search(line):
                 problems.append(f"model_instruction: {where} line {number}: role or chat marker")
             elif (screened := screen_input(line)).rule is not None:

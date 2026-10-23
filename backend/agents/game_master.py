@@ -102,11 +102,13 @@ def next_hint(case: Case, state: GameState) -> tuple[GameState, Hint | NoHint]:
     missing = [c for c in case.solution_chain if c not in state.discovered]
     if not missing:
         return state, NoHint("You already hold every clue you need. Make your accusation.")
-    text = _lead(case, state, missing[0], obtainable(case), set())
-    if text is None:
-        return state, NoHint("You have no lead on that yet.")
-    spent = state.model_copy(update={"hints_left": state.hints_left - 1})
-    return spent, Hint(missing[0], text)
+    reachable = obtainable(case)
+    for clue_id in missing:
+        text = _lead(case, state, clue_id, reachable, set())
+        if text is not None:
+            spent = state.model_copy(update={"hints_left": state.hints_left - 1})
+            return spent, Hint(clue_id, text)
+    return state, NoHint("You have no lead on that yet.")
 
 
 def _lead(

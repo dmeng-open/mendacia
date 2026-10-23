@@ -104,6 +104,8 @@ def test_record_then_replay_embed(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
 
     monkeypatch.setattr("litellm.embedding", fake_embedding)
     monkeypatch.setattr("litellm.completion_cost", lambda _: 0.0)
+    monkeypatch.setenv("MODEL_EMBED", "openai/test-embed")
+    monkeypatch.setenv("MENDACIA_OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("LLM_MODE", "record")
     texts = [uuid4().hex]
     first = embed(texts, purpose=uuid4().hex)
