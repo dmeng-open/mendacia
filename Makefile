@@ -2,7 +2,7 @@ ENV_FILE := $(if $(wildcard .env),.env,.env.example)
 ENV_NAMES := $(shell sed -n 's/^\([A-Z_]*\)=.*/\1/p' $(ENV_FILE))
 $(foreach v,$(ENV_NAMES),$(if $(filter environment,$(origin $(v))),,$(eval export $(v) := $(shell sed -n 's/^$(v)=//p' $(ENV_FILE)))))
 
-.PHONY: setup up db-create migrate api test lint typecheck ci doctor validate-cases check-case lint-evidence record-fixtures play-cli scan-instructions audit agent-inventory security-regress
+.PHONY: setup up db-create migrate api test lint typecheck ci doctor validate-cases check-case lint-evidence record-fixtures play-cli scan-instructions audit agent-inventory security-regress seed retrieval-eval record-retrieval
 
 setup:
 	cd backend && uv sync --frozen
@@ -29,7 +29,7 @@ lint:
 	cd backend && uv run ruff check . && uv run ruff format --check .
 
 typecheck:
-	cd backend && uv run mypy agents app engine evals migrations security tests
+	cd backend && uv run mypy agents app engine evals evidence migrations security tests
 
 ci: lint typecheck scan-instructions agent-inventory lint-evidence test security-regress
 
@@ -65,3 +65,12 @@ record-fixtures:
 
 play-cli:
 	cd backend && uv run python -m app.cli --case $(abspath $(CASE))
+
+seed:
+	cd backend && LLM_MODE=$(if $(RECORD),record,replay) uv run python -W ignore::RuntimeWarning -m evidence.index ../cases/*.json
+
+retrieval-eval:
+	cd backend && LLM_MODE=$(if $(RECORD),record,replay) uv run python -m evals.retrieval
+
+record-retrieval:
+	$(MAKE) RECORD=1 seed retrieval-eval
