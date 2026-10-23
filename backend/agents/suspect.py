@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
@@ -18,14 +17,7 @@ from agents.documents import quote_document
 from agents.events import Action, Rule, log_event
 from agents.extract import ExtractionFailed, extract_claims
 from agents.ledger import LedgerEntry
-from agents.state import (
-    Attempt,
-    Check,
-    Seat,
-    SuspectState,
-    TurnInput,
-    open_checkpointer,
-)
+from agents.state import Attempt, Check, OnStage, Seat, SuspectState, Talk, TurnInput
 from agents.verifier import UNKNOWN, Verdict, leaks_canary, verify_reply
 from agents.view import (
     Exchange,
@@ -35,7 +27,6 @@ from agents.view import (
     build_view,
     suspect_context,
 )
-from app.config import Settings
 from app.llm import ModelRole, complete
 from engine.schema import Case, Id, Statement
 from security.context import AuthContext
@@ -73,6 +64,8 @@ class TurnReport:
     attempts: tuple[Attempt, ...]
     fell_back: bool
     ledger: tuple[LedgerEntry, ...]
+    talk: Talk
+    audit: tuple[AuditRow, ...]
 
     @property
     def rewrites(self) -> int:
@@ -84,14 +77,64 @@ class TurnReport:
 
 
 class Interrogation:
-    def __init__(self, case: Case, game_id: str, saver: BaseCheckpointSaver[Any]) -> None:
+    """Runs one suspect turn from a stored Talk and proposes the next one. Writes no game state."""
+
+    def __init__(self, case: Case, game_id: str) -> None:
         self.case = case
         self.game_id = game_id
-        self._graph = GRAPH.compile(checkpointer=saver)
+        self._graph = GRAPH.compile()
+
+    async def ask(
+        self,
+        talk: Talk,
+        suspect: Id,
+        turn: TurnInput,
+        *,
+        state_version: int,
+        on_stage: OnStage | None = None,
+    ) -> TurnReport:
+        if suspect not in {s.id for s in self.case.suspects}:
+            raise ValueError(f"unknown suspect '{suspect}'")
+        unknown = set(turn.present) - {c.id for c in self.case.clues}
+        if unknown:
+            raise ValueError(f"unknown clues {sorted(unknown)}")
+        missing = set(turn.documents) - {d.id for d in self.case.documents}
+        if missing:
+            raise ValueError(f"unknown documents {sorted(missing)}")
+        start = SuspectState(
+            **dict(talk),
+            question=turn.question,
+            present=tuple(sorted(set(turn.present))),
+            documents=tuple(sorted(set(turn.documents))),
+        )
+        seat = Seat(self.case, suspect, self.game_id, state_version, on_stage)
+        state = SuspectState.model_validate(await self._graph.ainvoke(start, context=seat))
+        return TurnReport(
+            turn=len(state.history),
+            reply=state.history[-1].reply,
+            attempts=state.attempts,
+            fell_back=state.fell_back,
+            ledger=state.ledger.of(suspect),
+            talk=Talk(ledger=state.ledger, presented=state.presented, history=state.history),
+            audit=state.audit,
+        )
+
+
+class Interview:
+    """Keeps each suspect's Talk in memory and logs its audit rows: evals and tests only.
+    A served game keeps Talk in its games row and commits the rows with the turn."""
+
+    def __init__(self, case: Case, game_id: str) -> None:
+        self.room = Interrogation(case, game_id)
+        self.talks: dict[Id, Talk] = {}
         self._locks: dict[Id, asyncio.Lock] = {}
 
-    def seat(self, suspect: Id) -> Seat:
-        return Seat(case=self.case, suspect=suspect, game_id=self.game_id)
+    @property
+    def game_id(self) -> str:
+        return self.room.game_id
+
+    def state(self, suspect: Id) -> Talk:
+        return self.talks.get(suspect, Talk())
 
     async def ask(
         self,
@@ -100,40 +143,18 @@ class Interrogation:
         present: Iterable[Id] = (),
         documents: Iterable[Id] = (),
     ) -> TurnReport:
-        shown = tuple(sorted(set(present)))
-        handed = tuple(sorted(set(documents)))
-        if suspect not in {s.id for s in self.case.suspects}:
-            raise ValueError(f"unknown suspect '{suspect}'")
-        unknown = set(shown) - {c.id for c in self.case.clues}
-        if unknown:
-            raise ValueError(f"unknown clues {sorted(unknown)}")
-        missing = set(handed) - {d.id for d in self.case.documents}
-        if missing:
-            raise ValueError(f"unknown documents {sorted(missing)}")
-        seat = self.seat(suspect)
+        turn = TurnInput(question=question, present=tuple(present), documents=tuple(documents))
         async with self._locks.setdefault(suspect, asyncio.Lock()):
-            out = await self._graph.ainvoke(
-                TurnInput(question=question, present=shown, documents=handed),
-                seat.config,
-                context=seat,
-            )
-        state = SuspectState.model_validate(out)
-        return TurnReport(
-            turn=len(state.history),
-            reply=state.history[-1].reply,
-            attempts=state.attempts,
-            fell_back=state.fell_back,
-            ledger=state.ledger.of(suspect),
-        )
-
-    async def state(self, suspect: Id) -> SuspectState:
-        snapshot = await self._graph.aget_state(self.seat(suspect).config)
-        return SuspectState.model_validate(snapshot.values or {})
+            talk = self.state(suspect)
+            report = await self.room.ask(talk, suspect, turn, state_version=len(talk.history))
+            self.talks[suspect] = report.talk
+        await asyncio.to_thread(log_decisions, report.audit)
+        return report
 
 
 async def retrieve(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, object]:
     seat = runtime.context
-    subject = suspect_context(seat.case, seat.suspect, seat.game_id, len(state.history))
+    subject = suspect_context(seat.case, seat.suspect, seat.game_id, seat.state_version)
     view, trace = build_view(
         seat.case, subject, state.shown, state.ledger.of(seat.suspect), state.recent
     )
@@ -161,6 +182,8 @@ async def generate(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, obj
 
 async def extract(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, object]:
     seat = runtime.context
+    if seat.on_stage is not None and len(state.attempts) == 1:
+        await seat.on_stage("validating")
     last = state.attempts[-1]
     try:
         claims = await extract_claims(
@@ -258,11 +281,10 @@ async def commit(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, objec
         "game_master", "game_master", seat.game_id, view.case_version, view.state_version
     )
     turn = Resource("turn", str(state.turn), view.case_version, "conversation")
-    decision = authorize(master, "commit_turn", turn, PolicyContext(len(state.history)))
+    decision = authorize(master, "commit_turn", turn, PolicyContext(seat.state_version))
     outcome = "fallback" if state.fell_back else "released"
     trace = (TraceStep(step="commit", outcome=outcome, ms=0.0),)
     row = _row(master, state.trace_id, state.turn, "commit_turn", "turn", decision, trace)
-    await asyncio.to_thread(log_decisions, (*state.audit, row))
     if not decision.allowed:
         raise StaleState(decision.reason_code)
     claims = () if state.fell_back else state.attempts[-1].claims
@@ -275,14 +297,12 @@ async def commit(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, objec
         "ledger": result.commit(state.turn),
         "history": (*state.history, exchange),
         "presented": state.shown,
-        "audit": (),
-        "view": None,
-        "permitted": None,
+        "audit": (*state.audit, row),
     }
 
 
-def _build() -> StateGraph[SuspectState, Seat, TurnInput, SuspectState]:
-    g = StateGraph(SuspectState, context_schema=Seat, input_schema=TurnInput)
+def _build() -> StateGraph[SuspectState, Seat, SuspectState, SuspectState]:
+    g = StateGraph(SuspectState, context_schema=Seat)
     g.add_node("retrieve", retrieve)
     g.add_node("permitted_claims", permitted_claims)
     g.add_node("generate", generate)
@@ -471,13 +491,11 @@ def _print_report(report: TurnReport, elapsed_ms: int) -> None:
 
 async def _main(args: argparse.Namespace) -> int:
     case = Case.model_validate_json(args.case.read_text())
-    async with open_checkpointer(Settings().database_url) as saver:
-        game_id = args.game_id or uuid.uuid4().hex
-        print(f"game: {game_id}")
-        room = Interrogation(case, game_id, saver)
-        started = time.monotonic()
-        report = await room.ask(args.suspect, args.ask, args.present)
-        _print_report(report, round((time.monotonic() - started) * 1000))
+    game_id = uuid.uuid4().hex
+    print(f"game: {game_id}")
+    started = time.monotonic()
+    report = await Interview(case, game_id).ask(args.suspect, args.ask, args.present)
+    _print_report(report, round((time.monotonic() - started) * 1000))
     return 0
 
 
@@ -487,9 +505,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--suspect", required=True)
     parser.add_argument("--ask", required=True)
     parser.add_argument("--present", action="append", default=[], help="clue id; repeatable")
-    parser.add_argument(
-        "--game-id", default=None, help="reuse a game id to continue that game's interviews"
-    )
     return asyncio.run(_main(parser.parse_args(argv)))
 
 

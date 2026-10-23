@@ -19,9 +19,7 @@ from agents.game_master import (
     timeline,
 )
 from agents.screening import screen_input
-from agents.state import open_checkpointer
-from agents.suspect import Interrogation
-from app.config import Settings
+from agents.suspect import Interview
 from engine.schema import Case, Id
 
 HELP = (
@@ -33,7 +31,7 @@ Say = Callable[[str], None]
 
 
 class Game:
-    def __init__(self, case: Case, room: Interrogation, say: Say) -> None:
+    def __init__(self, case: Case, room: Interview, say: Say) -> None:
         self.case = case
         self.room = room
         self.say = say
@@ -208,16 +206,15 @@ class Game:
 async def play(
     case: Case, game_id: str, lines: AsyncIterator[str], say: Say = print, *, echo: bool = True
 ) -> Game:
-    async with open_checkpointer(Settings().database_url) as saver:
-        game = Game(case, Interrogation(case, game_id, saver), say)
-        game.intro()
-        async for line in lines:
-            if echo:
-                say(f"> {line}")
-            await game.handle(line)
-            if game.over:
-                break
-        return game
+    game = Game(case, Interview(case, game_id), say)
+    game.intro()
+    async for line in lines:
+        if echo:
+            say(f"> {line}")
+        await game.handle(line)
+        if game.over:
+            break
+    return game
 
 
 async def _stdin() -> AsyncIterator[str]:

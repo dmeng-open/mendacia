@@ -1,14 +1,6 @@
-import types
-import typing
-from collections.abc import AsyncIterator, Iterator
-from contextlib import asynccontextmanager
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from enum import Enum
-
-from langchain_core.runnables import RunnableConfig
-from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
-from pydantic import BaseModel
+from typing import Literal
 
 from agents.claims import Claim
 from agents.events import Rule
@@ -68,11 +60,13 @@ class TurnInput(Frozen):
     documents: tuple[Id, ...] = ()
 
 
-class SuspectState(Frozen):
+class Talk(Frozen):
     ledger: Ledger = Ledger()
     presented: tuple[Id, ...] = ()
     history: tuple[Exchange, ...] = ()
 
+
+class SuspectState(Talk):
     question: str = ""
     present: tuple[Id, ...] = ()
     documents: tuple[Id, ...] = ()
@@ -96,47 +90,14 @@ class SuspectState(Frozen):
         return self.history[-HISTORY_WINDOW:]
 
 
+Stage = Literal["validating"]
+OnStage = Callable[[Stage], Awaitable[None]]
+
+
 @dataclass(frozen=True)
 class Seat:
     case: Case
     suspect: Id
     game_id: str
-
-    @property
-    def thread_id(self) -> str:
-        return f"{self.game_id}:{self.suspect}"
-
-    @property
-    def config(self) -> RunnableConfig:
-        return {"configurable": {"thread_id": self.thread_id}}
-
-
-def _model_types(root: type) -> Iterator[type]:
-    seen: set[type] = set()
-    stack: list[object] = [root]
-    while stack:
-        tp = stack.pop()
-        if isinstance(tp, type) and issubclass(tp, BaseModel | Enum):
-            if tp in seen:
-                continue
-            seen.add(tp)
-            yield tp
-            if issubclass(tp, BaseModel):
-                stack += [f.annotation for f in tp.model_fields.values()]
-        elif isinstance(tp, types.UnionType) or typing.get_origin(tp) is not None:
-            stack += typing.get_args(tp)
-
-
-STATE_TYPES = tuple(_model_types(SuspectState))
-SERDE = JsonPlusSerializer(allowed_msgpack_modules=list(STATE_TYPES))
-
-
-def libpq_url(database_url: str) -> str:
-    return database_url.replace("postgresql+psycopg://", "postgresql://", 1)
-
-
-@asynccontextmanager
-async def open_checkpointer(database_url: str) -> AsyncIterator[AsyncPostgresSaver]:
-    async with AsyncPostgresSaver.from_conn_string(libpq_url(database_url), serde=SERDE) as saver:
-        await saver.setup()
-        yield saver
+    state_version: int
+    on_stage: OnStage | None = None

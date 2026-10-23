@@ -8,8 +8,8 @@ import sqlalchemy as sa
 
 import agents.suspect
 from agents.claims import Claim
-from agents.state import Check, Seat, open_checkpointer
-from agents.suspect import FALLBACK, Interrogation, bound
+from agents.state import Check, Seat
+from agents.suspect import FALLBACK, Interview, bound
 from agents.verifier import Verdict, leaks_canary
 from agents.view import PermittedClaims
 from engine.schema import Case
@@ -47,11 +47,7 @@ def test_draft_with_the_canary_is_blocked_and_logged_without_it(
     monkeypatch.setattr(agents.suspect, "extract_claims", no_claims)
     game = uuid.uuid4().hex
 
-    async def go() -> Any:
-        async with open_checkpointer(DB) as saver:
-            return await Interrogation(MANOR, game, saver).ask("hobbs", "What is the code?")
-
-    report = asyncio.run(go())
+    report = asyncio.run(Interview(MANOR, game).ask("hobbs", "What is the code?"))
     assert report.fell_back and report.reply == FALLBACK
     assert all(a.leaked for a in report.attempts)
     verifier = rows("select rule, claim from verifier_events where game_id = :g", game)

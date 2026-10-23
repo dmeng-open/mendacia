@@ -2,14 +2,14 @@ import asyncio
 from types import SimpleNamespace
 from typing import cast
 
-from agents.suspect import Interrogation
+from agents.suspect import Interview
 from app.cli import Game
 from tests.agents.test_game_master import LOCKED
 
 
 def game(lines: list[str]) -> list[str]:
     said: list[str] = []
-    g = Game(LOCKED, cast(Interrogation, SimpleNamespace(game_id="g")), said.append)
+    g = Game(LOCKED, cast(Interview, SimpleNamespace(game_id="g")), said.append)
     g.intro()
     for line in lines:
         asyncio.run(g.handle(line))

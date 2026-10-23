@@ -7,7 +7,7 @@ from typing import Any
 
 import agents.suspect
 from agents.state import Seat
-from agents.suspect import Interrogation, TurnReport
+from agents.suspect import Interview, TurnReport
 from agents.verifier import Verdict
 from engine.schema import Case, Id
 
@@ -181,7 +181,7 @@ def _authored(drafts: tuple[str, ...]) -> Iterator[None]:
         agents.suspect._speak = real
 
 
-async def play(room: Interrogation, suspect: Id, script: Script) -> list[TurnReport]:
+async def play(room: Interview, suspect: Id, script: Script) -> list[TurnReport]:
     reports = []
     for t in script:
         with _authored(t.drafts):
