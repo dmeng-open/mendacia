@@ -222,7 +222,6 @@ async def ask(ws: WebSocket, game_id: str) -> None:
         if service is None:
             raise Forbidden(game_id)
         owner = parse(ws.cookies.get(COOKIE), game_id, ws.app.state.secret)
-        await service.view(owner)
     except Forbidden:
         await ws.close(code=4403)
         return
@@ -232,6 +231,8 @@ async def ask(ws: WebSocket, game_id: str) -> None:
             await _turn(ws, service, owner, await ws.receive_text())
     except WebSocketDisconnect:
         return
+    except Forbidden:
+        await ws.close(code=4403)
 
 
 async def _turn(ws: WebSocket, service: GameService, owner: Session, frame: str) -> None:

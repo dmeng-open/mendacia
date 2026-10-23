@@ -3,9 +3,10 @@ import re
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.main import create_app
@@ -22,6 +23,10 @@ def client() -> Iterator[TestClient]:
     index_case(MANOR)
     with TestClient(create_app()) as c:
         yield c
+
+
+def app_of(client: TestClient) -> FastAPI:
+    return cast(FastAPI, client.app)
 
 
 class Player:
