@@ -61,7 +61,7 @@ These hold in every mode and every PR.
 - `EvidenceDoc`: `id`, `title`, `source` (provenance label), `body`, `is_key`, and `visibility` (`open`, or `unlocked_by` a list of clue or document ids). Built in P3-3, ADR 008. A locked document is closed to the player and never reaches a prompt until something in `unlocked_by` is found.
 - Ids match `^[a-z][a-z0-9_]*$` and are never a clingo keyword. One validator checks every reference and names the JSON path and the dangling id.
 
-**`case_version`** (built, P3-2) is the SHA-256 of the case's canonical JSON (sorted keys, no whitespace), from `security.context.case_version`. Every game, turn, index row, security event, and eval run records it. Security events record it from P3-2; games, turns, and index rows from P3-4 and P3-5. Editing a published case creates a new version and never mutates the old one.
+**`case_version`** (built, P3-2) is the SHA-256 of the case's canonical JSON (sorted keys, no whitespace), from `security.context.case_version`. Every game, turn, index row, security event, and eval run records it. Security events record it from P3-2 and index rows from P3-4 (built, ADR 009); games and turns from P3-5. Editing a published case creates a new version and never mutates the old one.
 
 **Canary** (built, P3-2, ADR 007). Each case version has a canary, `MENDACIA-CANARY-<case_version[:12]>` from `security.context.canary`. It belongs only to the Truth layer. It never belongs in a prompt, an API response, a log line, or an eval transcript. If it shows up in any of those, that is a P0 leak. The canary derives from `case_version`, so it marks Truth-layer text reaching an output; it is not a secret, and a player who types it only makes the turn fall back at no cost.
 
@@ -122,8 +122,8 @@ authorize(subject, action, resource, context) -> Decision
 - Deny by default. An unknown action, tool, or resource type is denied with a reason code.
 - Roles set the base scope (player, suspect, game master, eval worker, detective bot). Attributes narrow it (case, phase, unlocks, ownership).
 - An authorization and the commit it guards use the same `state_version`. If the version changed in between, the action is denied (no TOCTOU). P3-2 checks this inside one process; the cross-process check lands with the transactional commit in P3-5.
-- Vector and full-text hits are filtered in SQL by case, version, and visibility, then each hit is checked again with `authorize` (P3-4).
-- `security.policy.authorize` holds the table in code, with `POLICY_VERSION`; ADR 007 copies it, and a test fails when they disagree. P3-2 covers the suspect and game-master rows; P3-4 and P3-5 add the player, search, and tool rows.
+- Vector and full-text hits are filtered in SQL by case, version, and visibility, then each hit is checked again with `authorize` (built, P3-4, ADR 009).
+- `security.policy.authorize` holds the table in code, with `POLICY_VERSION`; ADR 007 copies it, and a test fails when they disagree. P3-2 covers the suspect and game-master rows, P3-3 the player `open_document` row that search reuses (P3-4), and P3-5 adds the tool rows.
 
 ### 6.2 Tool Broker (P3-5)
 
@@ -208,7 +208,7 @@ Every mutating request carries an `Idempotency-Key`. Errors return `{"code": "<r
 
 ## 8. Evals and release gates
 
-### 8.1 Metrics (P3-4, P5-2)
+### 8.1 Metrics (Recall@10, MRR, and ACL leaks built in P3-4 as `make retrieval-eval`; the rest P5-2)
 
 | Metric | Definition |
 |---|---|
