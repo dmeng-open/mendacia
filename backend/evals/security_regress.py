@@ -19,6 +19,7 @@ from agents.suspect import SUSPECT, Interrogation, TurnReport, narrates
 from agents.verifier import Verdict, exposed_facts, leaks_canary
 from app.config import Settings
 from app.db import sync_engine
+from app.llm_replay import MissingRecording
 from engine.schema import Case
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -38,6 +39,18 @@ class Outcome:
     label: str
     ok: bool
     detail: str
+
+
+def with_documents(case: Case, spec: dict[str, Any]) -> Case:
+    handed = [
+        {**turn["document"], "is_key": False, "visibility": "open"}
+        for turn in spec["turns"]
+        if "document" in turn
+    ]
+    if not handed:
+        return case
+    documents = [*case.model_dump()["documents"], *handed]
+    return Case.model_validate({**case.model_dump(), "documents": documents})
 
 
 def _culprit_leak(case: Case, claim: Claim, shown: set[str]) -> bool:
@@ -94,6 +107,7 @@ async def play(case: Case, room: Interrogation, kind: Kind, spec: dict[str, Any]
     screened: list[str] = []
     for turn in spec["turns"]:
         question, present = turn["ask"], tuple(turn.get("present", ()))
+        documents = (turn["document"]["id"],) if "document" in turn else ()
         screen = screen_input(question)
         if not screen.allowed:
             rule = screen.rule.value if screen.rule else "screen"
@@ -109,7 +123,7 @@ async def play(case: Case, room: Interrogation, kind: Kind, spec: dict[str, Any]
             for e in state.ledger.entries
             if e.status in (LieStatus.EXPOSED, LieStatus.ADMITTED)
         } | {lie.id for lie in case.planned_lies if lie.hides_fact in exposed}
-        report = await room.ask(spec["suspect"], question, present)
+        report = await room.ask(spec["suspect"], question, present, documents)
         if kind == "normal" and report.fell_back:
             return Outcome(kind, spec["id"], label, False, "fallback")
         found = leaks(case, report, shown, spent, spec["suspect"])
@@ -134,7 +148,7 @@ def _spent(game_ids: Sequence[str]) -> float:
     return float(total)
 
 
-def _canary_rows(case: Case, game_ids: Sequence[str]) -> int:
+def _canary_rows(cases: Sequence[Case], game_ids: Sequence[str]) -> int:
     with sync_engine(Settings().database_url).connect() as conn:
         rows = conn.execute(
             sa.text(
@@ -143,7 +157,7 @@ def _canary_rows(case: Case, game_ids: Sequence[str]) -> int:
             ),
             {"g": list(game_ids)},
         ).scalars()
-        return sum(leaks_canary(case, str(r)) for r in rows)
+        return sum(any(leaks_canary(c, str(r)) for c in cases) for r in rows)
 
 
 async def run(baseline: Path = BASELINE, max_usd: float = 1.0) -> list[Outcome]:
@@ -152,16 +166,25 @@ async def run(baseline: Path = BASELINE, max_usd: float = 1.0) -> list[Outcome]:
     run_id = uuid.uuid4().hex[:8]
     outcomes: list[Outcome] = []
     games: list[str] = []
+    variants = [case]
     async with open_checkpointer(Settings().database_url) as saver:
         kinds: tuple[tuple[Kind, str], ...] = (("attack", "attacks"), ("normal", "normal"))
         for kind, key in kinds:
             for item in spec[key]:
                 game = f"regress-{run_id}-{item['id']}"
                 games.append(game)
-                outcomes.append(await play(case, Interrogation(case, game, saver), kind, item))
+                played = with_documents(case, item)
+                variants.append(played)
+                try:
+                    outcome = await play(played, Interrogation(played, game, saver), kind, item)
+                except MissingRecording:
+                    label = item.get("class", "normal")
+                    detail = "unrecorded (record it with RECORD=1 make security-regress)"
+                    outcome = Outcome(kind, item["id"], label, False, detail)
+                outcomes.append(outcome)
                 if _spent(games) > max_usd:
                     raise SystemExit(f"stopped: spend passed ${max_usd:.2f}")
-    canary = _canary_rows(case, games) + sum(o.detail.count("canary") for o in outcomes)
+    canary = _canary_rows(variants, games) + sum(o.detail.count("canary") for o in outcomes)
     print_summary(outcomes, canary, _spent(games))
     return outcomes if canary == 0 else [*outcomes, Outcome("attack", "rows", "canary", False, "")]
 
