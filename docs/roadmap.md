@@ -1,0 +1,464 @@
+# Mendacia roadmap
+
+This is the full-project plan, final version. It describes where Mendacia goes after the MVP. **Nothing here is in progress.** Agents do not build from this file unless a phase of `docs/plan.md` points to a section of it. When a stage starts, its section becomes PRs in `docs/plan.md` with the same checklist format, and its rules move into `docs/spec.md`.
+
+Sources:
+
+- *Mendacia Product & Technology Plan v2.0* (2026-10-22), the long-term product blueprint.
+- *v2.1* (2026-10-22), which built a game-aware zero-trust runtime into v2.0 without changing its product or its stages.
+- What the operator brought back from Informanix Discover 2026.
+
+Prices, retention numbers, and session lengths below are hypotheses. No real player has tested them yet.
+
+## 1. Positioning
+
+Mendacia is an AI detective game and story universe that starts from one daily case the solver proves fair.
+
+- **Detective mode.** The player questions AI suspects who protect their secrets, searches a mixed archive, and submits a chain of reasoning.
+- **Killer mode.** The player builds and defends an alibi against a team of AI detectives. The detectives keep a belief state and check claims actively.
+
+The two selling points:
+
+1. "Every day, one case that is truly fair and provably solvable."
+2. "Trustworthy AI characters you can question freely, and play against."
+
+The technical differentiators are formal verification, stateful agent workflows, authorized retrieval, game-aware policy enforcement, verified release, and adversarial agent evals.
+
+Priority order, highest first: fun, correct game logic, enforceable permission boundaries, reliability and measurement, low running cost, then extensions on demand. Distributed parts arrive only when a measurement calls for them.
+
+## 2. Players and pacing
+
+- **Audience.** Fans of deduction, puzzles, murder-mystery parties, and daily challenges like Wordle.
+- **Three entry points:**
+  - a 5-minute tutorial or speed case,
+  - a 15 to 20 minute daily standard case,
+  - a 20 to 30 minute weekend deep case.
+
+  Test the length preference with an A/B test before fixing the mix.
+- **Guests** play at once with a server-bound anonymous session. Accounts are optional and only save progress.
+- **Content limits.** No gore, no real people or real crimes, no model training on player data. Submissions are moderated.
+
+## 3. Full feature map
+
+| Area | Player experience | Technical core | Security contract |
+|---|---|---|---|
+| Detective mode | Question 4 to 6 suspects, search, accuse with a clue chain | LangGraph, fact subgraph, lie ledger, verifier | Suspects retrieve only granted knowledge; replies pass claim and privacy checks; legitimate confrontation triggers disclosure |
+| Killer mode | Play the culprit and defend an alibi against AI detectives | Detective team, belief state, information-gain planning, contradiction detection | Detective tools are granted per investigation stage; no detective reads the solution; every decision is logged |
+| Evidence archive | Search dozens to hundreds of mixed real, false, and noise documents | Hybrid retrieval, graph links, SQL templates | Every hit is checked again against the ACL; no index crosses cases or players; text in documents is never an instruction |
+| Daily case | Everyone plays the same case each day and compares fair scores | Offline generation, simulated play, scheduled publish, leaderboard | Release gate includes jailbreak regression; scores are computed on the server; a pinned `case_version`; a failure falls back to a verified case |
+| Tutorial and difficulty | A real confrontation within 5 minutes, then a path to hard mode | Onboarding state machine, hint strategy, difficulty tiers | Safety refusals must not block a beginner; hints cite only unlocked facts |
+| Detective profile | Case record, skill badges, ranked challenges | Progress, scoring, stats | Account and guest data are separate; minimal collection; no one sees another player's raw dialogue |
+| Story seasons | A world, characters, and threads across daily cases | Versioned world canon, narrative dependencies | Canon versions stay separate from case solutions; new canon never rewrites a published case; knowledge crosses cases only through an explicit grant |
+| Spoiler-free sharing and friend challenges | Result cards, invites to the same case, strategy comparison | Share tokens, social links, anti-cheat | Share projections and short-lived tokens hold no solution; no user can read another user's turns |
+| Archive and premium stories | Free daily case, paid history, story seasons, case packs | Entitlements, payments | An entitlement controls content access only; it never grants a Truth bypass or an advantage in official play |
+| Player submissions | Submit a mystery, get a machine bug report, publish after review | Extraction, fact modelling, solver, moderation | Submissions are untrusted. They are parsed in a sandbox with size limits, scanned for privacy, copyright, and malicious text, and can never change a system prompt |
+
+## 4. Core loop and retention
+
+### 4.1 First session
+
+| Time | What the player gets |
+|---|---|
+| 0–30 s | The case hook and each suspect's first layer. No sign-up. The server issues an anonymous session bound to the game. |
+| 30–90 s | The first question and a natural reply. Progress may show while the reply is checked. No unverified token is sent. |
+| 2–3 min | The first checkable contradiction, then the archive opens. Search uses the current unlock state. |
+| 3–5 min | A successful confrontation that moves the lie ledger, and a clear "my reasoning worked" moment. |
+| After the accusation | The true timeline, the clue chain, and a result card. Only now is `solution_chain` readable. Making an account saves the record. |
+
+### 4.2 Three retention loops
+
+1. **Daily, D1–D7.** A fixed release time, the same case for everyone, catch-up play, and spoiler-free sharing. The client never prefetches tomorrow's hidden truth.
+2. **Skill, D7–D30.** The profile tracks key-evidence finds, question efficiency, and performance by difficulty. A model failure never counts as a player mistake.
+3. **Story, D30+.** Seasonal arcs, an archive of past cases, and cross-case foreshadowing. Every daily case is still solvable on its own.
+
+### 4.3 Social
+
+- Result cards show the case number, solved or not, questions, time, hints, and reasoning quality. They never show the culprit or restricted evidence.
+- Friend challenges share the same `case_version` and ruleset version. Full questions and model output stay private by default.
+- The submission pipeline: submit → extract → solver → simulated play → security scan → content and copyright review → publish. A report or takedown can withdraw sharing.
+- Clubs and group leaderboards come only after solo retention is proven.
+
+### 4.4 Anti-goals
+
+Mendacia does not use:
+
+- forced streaks,
+- pay-to-see-the-answer,
+- endless AI chat bait,
+- free characters made worse to push sales.
+
+Logs keep the structured events Mendacia needs. Raw dialogue is tiered by access level and kept for a limited time. A security audit is never a reason to make a player's dialogue public.
+
+## 5. Monetization and unit economics
+
+| Tier | Content | Rule it may not break |
+|---|---|---|
+| Free | The full daily case, full questioning, the debrief, sharing, a basic profile | The free case is complete and fairly solvable |
+| Plus | The full case archive, long story seasons, extra themed files, deeper stats | Never sells a clue needed to solve or a way around a security policy |
+| Case pack | A themed pack of about 5 cases | Unlocks content; never raises fact access in official play |
+| Cosmetics (optional) | Profile skins, badges, desk themes | No effect on rank or clue visibility |
+
+Pricing hypothesis from v2.0: Plus at about US$4.99 per month, case packs at US$4.99 to 9.99. Test packs on real players before building subscriptions.
+
+**Cost per game:**
+
+> case generation (amortized) + suspect replies + claim extraction and verification retries + hints and detective reasoning + embeddings and reranking + service costs
+
+Aggregate `llm_calls` by purpose, model, `game_id`, `case_id`, role, attempt, and `cache_hit`. Link each row to its policy decision and verification result, so a security fallback never loses its cost.
+
+Also track:
+
+- guard latency,
+- the false-block rate,
+- the cost of blocked retries,
+- the abuse cost per player,
+- set per-game and per-task budgets, a retry cap, and a circuit breaker.
+
+A timeout never allows a sensitive tool by default and never spends a question twice. No cost optimization may weaken uniqueness, fairness, or a security boundary.
+
+## 6. Target architecture
+
+### 6.1 Three planes
+
+- **Online runtime.** React and TypeScript → FastAPI REST and WebSocket → Game Master and LangGraph agents → LiteLLM. Every call that crosses a boundary is authorized.
+- **Offline pipeline.** Case construction and the clingo proof → documents and index → simulated play by the AI detective → adversarial security evals → release gate → a versioned case.
+- **Shared core.** PostgreSQL with pgvector holds facts, the index, sessions, ACLs, the lie ledger, and the audit outbox. Caches and queues are added only on demand.
+
+The security components (`AuthContext`, the policy engine, `AuthorizedRetriever`, `ToolBroker`, the security verifier, security events) live in the FastAPI codebase. The MVP builds them in Phase 3.
+
+### 6.2 Live request path
+
+```
+React / TypeScript (untrusted client)
+     │ REST / WebSocket
+     ▼
+FastAPI [session, quota, idempotency, input checks]
+     ▼
+Game Master ──> PolicyEngine / AuthContext
+     │
+     ▼
+LangGraph suspect or detective agent
+     │       └── ToolBroker ──> AuthorizedRetriever ──> PostgreSQL / pgvector
+     ▼
+LiteLLM candidate reply
+     ▼
+Claim extraction ──> verifier + rules + lie ledger
+     ▼
+[repair or fallback]  OR  [transactional commit + outbox]
+     ▼
+Release only verified text
+```
+
+Three hard boundaries hold on this path:
+
+- No fact is retrieved before authorization.
+- No reply is sent before verification.
+- No "committed" state is announced before the transaction commits.
+
+Model output, retrieved documents, and user input never decide an authorization.
+
+### 6.3 Technology choices and when each one arrives
+
+| Technology | Purpose | When it arrives |
+|---|---|---|
+| FastAPI + WebSocket | Live API and streaming | MVP. Releases only verified chunks |
+| LangGraph | Suspect, game master, and generation workflows | MVP. Explicit nodes, checkpoints, authorize → execute → verify. Never the only security boundary |
+| PydanticAI | Structured claim and submission extraction | MVP. Extraction can miss claims, so it is never the only leak defense |
+| clingo (Z3 as a fallback) | Uniqueness, contradiction, necessity | MVP. The solver and the full Truth are never exposed to a suspect |
+| PostgreSQL + pgvector | Facts, sessions, ACL, retrieval | MVP. Measure data size, QPS, and p95 before splitting out a vector engine. PG full-text search is not BM25; add a BM25 engine only when a recall and latency benchmark asks for it |
+| LiteLLM | One model wrapper with cost logging and replay | MVP. Provider keys stay on the server; each purpose has its own model, budget, and log sensitivity |
+| Cloud Run + Cloud SQL + Terraform | Hosting | MVP (P6-1, P6-2) |
+| OpenTelemetry → Cloud Trace (Langfuse optional) | Traces and cost | MVP baseline in P6-2. Unify game, turn, job, trace, and policy IDs. Langfuse only if the prompt and eval workflow needs it |
+| Redis | Cache, leaderboard | Stage D, one use at a time. Lie ledger and permission state are never cached across players; Postgres stays the source of truth |
+| RabbitMQ (with Celery) | Retryable background commands | Stage D or G, when the Postgres outbox plus workers misses its queue SLA. Dead letters and a manual inspection path. Do not add two brokers without a reason |
+| Kafka | Replayable high-volume event stream | Stage G, only when event volume, consumer count, and retention needs prove it. RabbitMQ and Kafka do different jobs |
+| Google ADK + A2A | Multi-agent detective team | Stage E, after a single-process detective team has proven the gameplay value. Messages carry sender identity, scope, and authorized actions |
+| MCP | Tool integration | Stage G. Read-only by default, whitelisted tools and resources, validated arguments, unknown servers denied, scan on register |
+| GKE + Google AX + Agent Substrate | Isolated, suspendable, resumable agent runtime | Stage E or G under the entry criteria in §6.4 |
+
+### 6.4 Google AX and Agent Substrate
+
+**What they are.** Google's Agent Executor (AX) is an open orchestrator for autonomous agents.
+
+- Its building blocks are Task, Workspace, Gateway, and Model.
+- It schedules each task as a sandboxed actor on Agent Substrate.
+- Substrate runs on GKE and multiplexes many idle actors onto a smaller pool of ready workers, suspending and restoring them quickly.
+- AX v0.3 moved task state from etcd to Redis Streams.
+
+**Status at the time of writing (October 2026):**
+
+- AX is Apache-2.0 and in early development, with breaking changes planned.
+- Agent Substrate is in limited GA on GKE, and its README says it is not ready for production and that its APIs will change.
+- Substrate is not an officially supported Google product.
+
+**Why it fits Mendacia later.** Killer mode's detective team and long offline jobs (case generation, simulated play, weekly red-team runs) are agents that wait. They wait for a player's next move, for a model, or for a batch. Suspending them cheaply and resuming them with their state is what Substrate is for. MVP suspects are short request-response turns that Cloud Run already handles.
+
+**Entry criteria (all must hold):**
+
+1. AX reaches v1.0 or GA, and Agent Substrate is GA with a supported upgrade path.
+2. A measurement shows the need. For example, killer-mode detectives hold an idle session across player turns longer than Cloud Run request limits allow, or offline jobs waste paid workers while idle, and the cost difference exceeds the cost of running a GKE cluster.
+3. The authorization, concurrency, and deployment baselines from the MVP and stage C are in place, so AX adds isolation on top of a working system rather than replacing missing controls.
+4. AX tasks can use the same `AuthContext`, `ToolBroker`, and policy engine as the API. No test mode bypasses them.
+
+**Migration order:**
+
+1. Terraform a GKE Autopilot cluster beside Cloud Run in staging.
+2. Run the offline job runners (generation, simulated play, red-team evals) as AX tasks, with their Workspaces holding only what their manifests grant.
+3. Run the killer-mode detective team as AX tasks.
+4. Move the live suspect path last, and only if p95 and cost on staging beat Cloud Run.
+
+Each step ships behind a flag with a rollback to the Cloud Run path, and an ADR records the measured reason.
+
+**What AX does not replace.** The policy engine, the verifier, the lie ledger transaction, and the canary. AX isolates runtimes. It does not decide what a suspect may say.
+
+## 7. Correctness and security design
+
+### 7.1 Four data layers
+
+| Layer | Holds | Rule |
+|---|---|---|
+| Truth | Case version, culprit, timeline, core evidence, `solution_chain` | Only the solver and narrowly authorized services read it in full. Never the client or a suspect model |
+| Knowledge | Each suspect's known facts, allowed lies, sources, disclosure conditions | Authorized by `suspect_id + fact_id + case_version` |
+| Player | Discovered and verified evidence, question and hint budgets, unlocks, score | Identity and game ownership are verified on the server |
+| Conversation | Public statement history, the lie ledger, checkpoints, turn and state versions | Public history and hidden memory stay separate |
+
+**Knowing is not disclosing.** A suspect can know a secret it may not yet say. Disclosure depends on the grant, what the player can see, a confrontation trigger, and the case rules. The Game Master or a domain rule commits an unlock in a transaction. A model saying "I'm willing to tell you" unlocks nothing.
+
+### 7.2 Nine-step suspect turn
+
+request → authorized retrieval → permitted claims → generation → claim extraction → verification → repair or fallback → commit → release. `docs/spec.md` §5 is authoritative. The MVP builds all nine steps.
+
+### 7.3 Threat model and trust order
+
+`docs/spec.md` §6.8 holds the threat table. The trust order, lowest first: client < untrusted input and evidence < model output < broker-scoped tool execution < rules and database transactions. A model cannot raise its own privileges, change a policy, or authorize evidence the player has not found.
+
+### 7.4 Concurrency, failure, and replay
+
+- Each `game_id + suspect_id` uses an optimistic `state_version` or serialization. Idempotency keys have a defined lifetime.
+- One transaction commits the turn, ledger, score, and outbox. Steps that cross processes use a reliable outbox and compensation.
+- When the policy engine, database, or verification fails, sensitive actions fail closed. Low-risk screens show an in-character fallback that costs nothing.
+- Production replay never stores a provider key. Sensitive prompts and context are encrypted, kept for a limited time, and every access is audited. Evals default to synthetic or redacted cases.
+- Cache keys include `case_version`, the actor scope, and the visibility version. Dynamic ledger and unlock state are never reused across games.
+- Every generation and eval run pins case, model, prompt, and policy versions, plus the seed and the data snapshot, so it can be reproduced and rolled back.
+
+### 7.5 Ideas taken from Informanix Discover 2026
+
+The MVP already builds:
+
+- the agent-instruction supply-chain guard,
+- agent manifests and the inventory gate,
+- the read-only Tool Broker,
+- decision traces,
+- the canary and honeypot,
+- the no-bypass rule,
+- chained-leak attacks,
+- auto-generated regression cases,
+- versioned prompts,
+- the component-by-attack heatmap with OWASP tags,
+- the weekly red-team run.
+
+`docs/plan.md` Appendix D maps each one to its PR. The roadmap extends them in stages C and G (§8).
+
+What Mendacia does not copy:
+
+- an enterprise AI-asset inventory across clouds,
+- endpoint scanning,
+- SIEM and SOAR integrations,
+- a standalone AI broker service.
+
+Mendacia takes the ideas (zero trust, continuous evaluation, policy outside the model) and keeps the implementation in its own codebase.
+
+## 8. Stages
+
+Each stage lists its goal, what it delivers, the architecture change, entry criteria, exit metrics, and what it must not build.
+
+### A. Foundation (done)
+
+FastAPI, PostgreSQL with pgvector, the LiteLLM wrapper with cost logging, record and replay, and CI. These are Phases 0–2 of `docs/plan.md`.
+
+### B. MVP game loop (in progress: `docs/plan.md`)
+
+- **Delivers:**
+  - the case schema and the clingo proof,
+  - verified suspects, the game master, and the browser game,
+  - authorized hybrid search,
+  - case generation,
+  - the detective bot,
+  - the security and quality evals,
+  - deployment to Cloud Run with an operator-approved production release.
+- **Security delivered:**
+  - Truth and Knowledge ACLs,
+  - authorized retrieval and permitted claims,
+  - the verifier,
+  - the read-only Tool Broker,
+  - no streaming before verification,
+  - jailbreak regression,
+  - the supply-chain guard.
+- **Must not:** rely on the model's own "do not reveal" instruction.
+
+### C. Release-grade reliability
+
+- **Goal.** The game survives failures and load without losing fairness.
+- **Delivers:**
+  - fault injection (model 429s, timeouts, database failover, policy-engine outage),
+  - adaptive retries with backoff and jitter,
+  - cache scopes for immutable case data and embeddings,
+  - dynamic retrieval routing by intent (SQL, graph, hybrid with rerank),
+  - per-node structured output schemas (claim, belief update, hint, accusation),
+  - redaction and encryption of replay artifacts, with an access audit,
+  - versioned policy events,
+  - concurrency tests on the same game from two clients,
+  - a read-only security dashboard UI built on `security_events` and `security_eval_runs` (the heatmap, allow rate, guard latency, top reason codes).
+- **Architecture change.** None required. Redis appears only if a measured cache saves cost without crossing player scope.
+- **Entry criteria.** The MVP is in production with real traffic data for turn p95, cost per game, and false-reject rate.
+- **Exit metrics.**
+  - Turn p95 and 429 recovery meet the SLOs written from the MVP baselines.
+  - State conflicts are 0 under the concurrency suite.
+  - Cache cross-session leaks are 0.
+- **Must not:** promise zero risk from unknown attacks.
+
+### D. Daily content and growth
+
+- **Goal.** Every day has a case worth playing, and players come back and share.
+- **Delivers:**
+  - an automated production pipeline with a stock of verified spare cases,
+  - Cloud Scheduler publishing at a fixed time zone, falling back to a verified spare on failure,
+  - simulated play at several skill tiers, playability and difficulty scoring, human sample review,
+  - fair scoring computed on the server,
+  - spoiler-free share cards and links with short-lived tokens,
+  - optional accounts and the detective profile,
+  - a simple daily leaderboard with anti-cheat (server-side scores, replay detection, ruleset version),
+  - the tutorial and difficulty tiers,
+  - cohort analytics: activation, D1, D7, D30, share rate, invite completion.
+- **Architecture change.** Redis for the leaderboard, if Postgres measurements need it. The RabbitMQ entry criterion is evaluated here.
+- **Entry criteria.**
+  - Stage C exit met.
+  - Open decision 7 (time zone and catch-up deadline) answered.
+- **Exit metrics.**
+  - Daily publish success 100 percent over 30 days, counting spare fallbacks as success.
+  - First-confrontation-within-5-minutes rate and D1/D7 measured against targets the operator sets from MVP data.
+- **Must not:** add paid solving privileges.
+
+### E. Killer mode and the AI detective team
+
+- **Goal.** The second signature mode: the player defends an alibi against detectives who reason.
+- **Delivers:**
+  - an AI detective core with a belief state over suspects and hypotheses,
+  - question choice by expected information gain,
+  - a contradiction-detection tool,
+  - least-privilege tools granted per investigation stage,
+  - killer-mode cases and scoring,
+  - difficulty calibrated with Brier scores across simulated player tiers,
+  - the simulation gate before release,
+  - identity for every agent and message authentication between agents.
+- **Architecture change.**
+  - Start in-process with LangGraph.
+  - Add Google ADK and A2A when a measured gain from the multi-agent split shows.
+  - Evaluate AX and Agent Substrate under §6.4.
+- **Entry criteria.** Stage D exit met, and detective-mode retention shows players want more depth.
+- **Exit metrics.**
+  - Detective win rate inside the target band at each difficulty.
+  - Brier score below the threshold set from pilot data.
+  - Detectives read the Truth 0 times, proven by the agent inventory and the eval runner.
+- **Must not:** let a detective read the solution oracle.
+
+### F. Monetization
+
+- **Goal.** A sustainable business without selling answers.
+- **Delivers:**
+  - the full case archive,
+  - premium story seasons with a versioned world canon,
+  - themed case packs and payments,
+  - optional cosmetics,
+  - refunds and platform transaction ids,
+  - unit-economics dashboards (cost per game, free-player cost, conversion, contribution margin).
+- **Architecture change.** The `Entitlement` and `Purchase` objects are kept separate from game authorization. `authorize` never reads an entitlement for a Truth decision.
+- **Entry criteria.**
+  - Stage D exit met.
+  - A paid-pack experiment with real players supports either packs or a subscription.
+- **Exit metrics.** Purchase and repurchase rates and contribution margin positive at the tested price.
+- **Must not:** sell anything that bypasses an ACL or changes clue visibility in official play.
+
+### G. Player submissions and scale
+
+- **Goal.** A community content network and the capacity to serve it.
+- **Delivers:**
+  - submissions with sandboxed parsing, size and nesting limits, a malicious-attachment scan, privacy and copyright review, and a takedown flow;
+  - a third-party tool and MCP registry that records the provider, tool schema, allowed actors, scope, side effects, rate limit, and approval requirement, and runs the instruction scan and agent manifest gate when a tool registers (unknown servers denied);
+  - friend clubs and group leaderboards;
+  - capacity planning and load tests;
+  - incident response runbooks.
+- **Architecture change, each step justified by a measurement:**
+  - RabbitMQ batching for moderation and generation queues,
+  - Kafka for a replayable event stream,
+  - GKE and Google AX (§6.4) for isolated agent runtimes,
+  - a dedicated vector engine if pgvector misses its SLO at the measured data size.
+- **Entry criteria.**
+  - Stages D and F exit met.
+  - Measured volume exceeds the current stack's SLOs.
+  - Decision 6 in §11 (submission rights) answered.
+- **Exit metrics.** Queue SLA, moderation turnaround, load-test p95, and cost per submission inside targets.
+- **Must not:** add Kafka, Kubernetes, AX, or a new database because of an "enterprise-grade" label.
+
+### 8.1 Dependency chains
+
+1. **Game correctness:** case schema → clingo → Truth and Knowledge ACL → permitted claims → suspect verifier → LangGraph turns → game master → end-to-end evals.
+2. **Data security:** evidence documents → provenance and visibility → authorized retrieval and query templates → hybrid retrieval → Recall@10 and ACL regression → context optimization.
+3. **Reliable interaction:** `AuthContext` → policy engine → Tool Broker → verification → atomic commit and outbox → verified response → security trace.
+4. **Retention and revenue:** daily publishing → fair scoring → spoiler-free sharing → cohort analytics → monetization.
+5. **Killer mode:** AI detective core → belief state and information gain → least-privilege tool evals → killer mode → simulation gate.
+
+## 9. Metrics matrix
+
+| Dimension | Must measure | Use |
+|---|---|---|
+| Formal correctness | Uniqueness pass rate, necessity pass rate, repair rounds | Release gate |
+| Content and character | Line contradiction rate, planned lies kept, secret leak successes | Quality and security |
+| Agent security | Unauthorized access successes, unauthorized tool successes, early spoiler successes, canary leaks | Regression gate; all 0 on the attack corpus |
+| Gameplay false blocks | Legitimate confrontations rejected, fallback rate, first-game block rate | Keep the guard from ruining play |
+| Retrieval | Recall@10, MRR, p95, ACL filter misses | Retrieval quality and safety |
+| AI detective | Win rate, questions used, Brier score, performance by difficulty | Killer mode and simulation |
+| Evals | Multi-run pass rate, Cohen's kappa, coverage of failed-run replays | Reproducibility |
+| Reliability | Turn p95, 429 recovery, state conflicts, retries, guard latency | Service SLOs |
+| Activation and retention | First question, confrontation within 5 minutes, first case finished, D1/D7/D30 | Product experience |
+| Sharing | Share rate, invite landing rate, challenge participation | Growth |
+| Economics | AI cost per game, guard and retry cost, conversion, contribution margin | Sustainable operation |
+
+Recall@10 stays the retrieval metric. "Leaks = 0" is a release gate on a named attack corpus, not a guarantee against unknown attacks. Thresholds without real traffic start as measured baselines and become SLOs later.
+
+## 10. Release gates
+
+1. **Code:** types, lint, unit and integration tests, migrations, deploy smoke test, load and fault injection, unauthorized tool and database tests.
+2. **Logic:** uniqueness, consistency, necessary clues, evidence provenance, knowledge grants, lie ledger transitions, planned lies kept.
+3. **Agent:** secret and jailbreak attacks, indirect injection, cross-session, tool overreach, repeated runs across model versions, cost, traces, false blocks, no early streaming.
+4. **Content:** playability, fair difficulty, content limits, human sample review, community safety, copyright and privacy, spoiler-free share check.
+
+**P0 blockers:**
+
+- no unique solution,
+- the regression set reads the Truth,
+- a tool bypasses authorization,
+- a player gets the solution before meeting the conditions,
+- a failed verification still releases text,
+- the canary leaks,
+- normal confrontations are blocked so often that a first game cannot finish.
+
+## 11. Open product and security decisions
+
+The MVP decisions are in `docs/plan.md` (Open decisions). These are needed in later stages.
+
+1. **Daily case rules.** Publish time zone, catch-up deadline, whether past cases count toward the current leaderboard (stage D).
+2. **Difficulty and scoring.** How the 20-question budget treats clarifications, whether searches and hints cost budget in ranked play (stage D).
+3. **Story seasons.** Hand-craft a few cross-case threads first, then test whether AI can keep long-term canon consistent (stage F).
+4. **Monetization.** Whether players pay for deep stories or for the archive, tested before building subscriptions (stage F).
+5. **Cost ceiling.** The sustainable monthly AI cost per free player, and rate limits for costly modes (stage C).
+6. **Submission rights.** Terms, attribution, review standard, takedown, license, possible revenue share (stage G).
+7. **Upgrade boundaries.** The authorization model for MCP, A2A, external tools, and paid archive unlocks, and whether each action needs its own audit or user confirmation (stages E–G).
+8. **Retention and review.** Default retention for raw dialogue, replays, and submissions; who may read them; how deletion and complaints work, for the actual serving region (stage C).
+
+## 12. Not yet validated
+
+- Pricing, session lengths, retention loops, and growth assumptions have not been tested with real players. Do not present them as results in fundraising material or a résumé.
+- The security layer, the red-team system, fine-grained fact ACLs, the Tool Broker, and any agent runtime are designs until their PRs merge with evidence. This document is not a penetration test, a threat-model review, or a privacy compliance review.
+- Descriptions of third-party products (Google AX and Agent Substrate, ADK and A2A, Zscaler) state their design goals and public status as of October 2026. They are not verified claims about performance, support, or fit. Re-check them before any stage that adopts them.
+- The relation to Zscaler is inspiration from a conference demo. Mendacia does not use their products or copy their implementation.

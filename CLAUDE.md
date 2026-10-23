@@ -14,6 +14,7 @@ A daily AI murder-mystery game where suspects lie to protect their secrets, but 
 ## Docs
 - `docs/spec.md`: what to build. `docs/plan.md`: phases, tasks, and acceptance criteria.
 - `docs/adr/`: one record per design decision. `docs/QUESTIONS.md`: open questions for the human.
+- `docs/roadmap.md`: the full project beyond the MVP. Do not build from it unless a phase of `docs/plan.md` says so. Production deploys go through the `deploy-prod` workflow and are approved by the human only.
 
 ## Rules for agents
 - Use poteto-mode for anything that touches more than one file.
