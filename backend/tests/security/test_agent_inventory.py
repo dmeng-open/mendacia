@@ -75,3 +75,21 @@ def test_calling_a_provider_outside_the_wrapper_fails(source: str) -> None:
 
 def test_getattr_on_a_truth_field_reads_the_truth_layer() -> None:
     assert scan_module("m", "def f(case):\n    return getattr(case, 'culprit')\n").reads_truth
+
+
+def test_tools_join_the_scan() -> None:
+    source = 'async def f(broker, ctx):\n    await broker.call(ctx, "submit_accusation", {})\n'
+    assert problems([scan_module("agents.extract", source)]) == [
+        "agents.extract: extractor uses tool 'submit_accusation' outside its manifest"
+    ]
+    assert problems([scan_module("app.rogue", source)]) == [
+        "app.rogue: tool 'submit_accusation' belongs to no agent"
+    ]
+
+
+def test_a_suspect_manifest_with_tools_fails() -> None:
+    suspect = replace(next(a for a in AGENTS if a.name == "suspect"), tools=("open_document",))
+    assert problems([], [suspect]) == ["suspect: suspects get no tools"]
+    assert problems([], [replace(suspect, name="x", tools=("reveal_solution",))]) == [
+        "x: lists unregistered tool 'reveal_solution'"
+    ]

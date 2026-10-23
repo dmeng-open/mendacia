@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from agents.registry import AGENTS, LLM_ADAPTERS, AgentManifest
+from security.tool_broker import TOOLS
 
 BACKEND = Path(__file__).resolve().parents[1]
 SCANNED = ("agents", "app", "engine", "evals", "security")
@@ -31,6 +32,7 @@ class ModuleUse:
     reads_truth: bool
     tables: frozenset[str]
     bypasses: tuple[int, ...] = ()
+    tools: frozenset[str] = frozenset()
 
 
 def sources(root: Path = BACKEND) -> list[tuple[str, str]]:
@@ -80,7 +82,10 @@ def scan_module(module: str, source: str) -> ModuleUse:
     bypasses: list[int] = []
     truth = False
     tables: set[str] = set()
+    tools: set[str] = set()
     for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and node.value in TOOLS:
+            tools.add(str(node.value))
         if isinstance(node, ast.Attribute) and node.attr in TRUTH_ATTRS:
             truth = True
         if isinstance(node, ast.Constant) and node.value in TABLES:
@@ -108,7 +113,9 @@ def scan_module(module: str, source: str) -> ModuleUse:
         text = purpose.value if isinstance(purpose, ast.Constant) else None
         text = text if isinstance(text, str) else None
         calls.append(CallSite(module, node.lineno, _role(role_arg, constants), text))
-    return ModuleUse(module, tuple(calls), truth, frozenset(tables), tuple(bypasses))
+    return ModuleUse(
+        module, tuple(calls), truth, frozenset(tables), tuple(bypasses), frozenset(tools)
+    )
 
 
 def _imports_provider(node: ast.Import | ast.ImportFrom) -> bool:
@@ -131,7 +138,13 @@ def owner(module: str, agents: Sequence[AgentManifest]) -> AgentManifest | None:
 
 
 def problems(uses: Iterable[ModuleUse], agents: Sequence[AgentManifest] = AGENTS) -> list[str]:
-    out = []
+    out = [
+        f"{a.name}: lists unregistered tool {t!r}"
+        for a in agents
+        for t in a.tools
+        if t not in TOOLS
+    ]
+    out += [f"{a.name}: suspects get no tools" for a in agents if a.name == "suspect" and a.tools]
     for use in uses:
         if use.module in LLM_ADAPTERS:
             continue
@@ -139,7 +152,12 @@ def problems(uses: Iterable[ModuleUse], agents: Sequence[AgentManifest] = AGENTS
         agent = owner(use.module, agents)
         if agent is None:
             out += [f"{c.module}:{c.line}: model call belongs to no agent" for c in use.calls]
+            out += [f"{use.module}: tool {t!r} belongs to no agent" for t in sorted(use.tools)]
             continue
+        out += [
+            f"{use.module}: {agent.name} uses tool {t!r} outside its manifest"
+            for t in sorted(use.tools - set(agent.tools))
+        ]
         for c in use.calls:
             if c.purpose not in agent.purposes:
                 out.append(f"{c.module}:{c.line}: {agent.name} uses purpose {c.purpose!r}")
@@ -184,7 +202,7 @@ def main(argv: Sequence[str]) -> int:
     out.write_text(json.dumps({"agents": rows, "problems": found}, indent=2) + "\n")
     for row in rows:
         layers = ",".join(row["layers"]) or "-"
-        tools = ",".join(row["tools"]) or "-"
+        tools = str(len(row["tools"])) if row["tools"] else "-"
         status = f"PLANNED {row['planned']}" if row["planned"] else "OK"
         role = row["role"] or "-"
         print(f"{row['agent']:<14} {role:<7} tools={tools:<4} layers={layers:<38} {status}")
