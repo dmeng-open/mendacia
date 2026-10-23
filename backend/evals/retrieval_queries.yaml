@@ -1,0 +1,146 @@
+# case, query, relevant (one document id), state (clues found, documents opened).
+# found or withheld is derived from engine.evidence.visible_documents, never written here.
+
+# manor
+- case: manor
+  query: "The pavilion visitors' book has Dr. Finch signed in from 9:55pm to 10:40pm."
+  relevant: pavilion_visitors_book
+- case: manor
+  query: who signed in at the garden summerhouse that night
+  relevant: pavilion_visitors_book
+- case: manor
+  query: torn page where she says she will have it out with him at ten
+  relevant: clara_diary_page
+- case: manor
+  query: empty velvet case in the dressing table
+  relevant: opener_case_note
+- case: manor
+  query: Michaelmas loan two thousand pounds not repaid
+  relevant: ashcombe_ledger
+- case: manor
+  query: what was on the tray for the late supper
+  relevant: dinner_menu
+- case: manor
+  query: which servant had the evening off to visit her sister
+  relevant: staff_duties
+- case: manor
+  query: glass falling, rain expected overnight
+  relevant: barometer_note
+- case: manor
+  query: officer found no sign of forced entry
+  relevant: constable_report
+- case: manor
+  query: why the annual dance was cancelled this year
+  relevant: hunt_ball_clipping
+- case: manor
+  query: telegram saying the account is six months in arrears
+  relevant: finch_telegram
+  state: {opened: [ashcombe_ledger]}
+- case: manor
+  query: what do the solicitor's papers say about the revised will
+  relevant: solicitor_letter
+  state: {discovered: [diary_page]}
+- case: manor
+  query: what do the solicitor's papers say about the revised will
+  relevant: solicitor_letter
+- case: manor
+  query: pawnbroker's ticket for a gold watch in the doctor's bag
+  relevant: finch_bag_inventory
+- case: manor
+  query: telegram demanding settlement of the doctor's overdue account
+  relevant: finch_telegram
+
+# gallery
+- case: gallery
+  query: The east hall camera shows Lady Wren in front of her painting at 7pm.
+  relevant: cctv_log
+  state: {opened: [security_desk_memo]}
+- case: gallery
+  query: The east hall camera shows Lady Wren in front of her painting at 7pm.
+  relevant: cctv_log
+- case: gallery
+  query: The vault door log shows the guard's keycard used at 7:04pm.
+  relevant: vault_door_log
+- case: gallery
+  query: curator wants the full price returned for the painting or she calls the police
+  relevant: refund_demand
+- case: gallery
+  query: a second copy of the footage is kept at the security desk
+  relevant: security_desk_memo
+- case: gallery
+  query: which hall is Harbour at Dusk hung in
+  relevant: hanging_plan
+- case: gallery
+  query: who was the night guard on Friday
+  relevant: guard_rota
+- case: gallery
+  query: where was the bronze statuette stored before the valuation
+  relevant: packing_room_list
+- case: gallery
+  query: espresso and lemon cake paid in cash
+  relevant: cafe_receipt
+- case: gallery
+  query: timetable for speeches and when guests leave
+  relevant: run_sheet
+- case: gallery
+  query: cover on the painting is suspended pending authentication
+  relevant: insurer_letter
+- case: gallery
+  query: titanium white in the ground means it is a modern copy
+  relevant: conservator_report
+  state: {opened: [refund_demand]}
+- case: gallery
+  query: titanium white in the ground means it is a modern copy
+  relevant: conservator_report
+- case: gallery
+  query: the artist complains of being hung at the end of a corridor
+  relevant: theo_note
+  state: {discovered: [theo_cafe_testimony]}
+- case: gallery
+  query: note from the painter about the triptych
+  relevant: theo_note
+
+# lighthouse
+- case: lighthouse
+  query: The boathouse ledger has Jory Penhale logging a crate at 9:05pm.
+  relevant: boathouse_ledger_page
+- case: lighthouse
+  query: inspection passed, signed by the harbour board man
+  relevant: lamp_room_log
+- case: lighthouse
+  query: when was high water on Thursday
+  relevant: tide_table
+- case: lighthouse
+  query: causeway closed from six, wind force 9
+  relevant: storm_bulletin
+- case: lighthouse
+  query: who rents the spare cottage and what may not be stored there
+  relevant: cottage_lease
+- case: lighthouse
+  query: mackerel and crab sold at the quay
+  relevant: fish_receipt
+- case: lighthouse
+  query: how much paraffin was in the keeper's stores
+  relevant: stores_inventory
+- case: lighthouse
+  query: fishing fleet stayed in harbour as the gale came ashore
+  relevant: gale_clipping
+- case: lighthouse
+  query: no crates stored here without the keeper's mark
+  relevant: boathouse_notice
+- case: lighthouse
+  query: overdue account for rope and tar
+  relevant: chandlery_invoice
+- case: lighthouse
+  query: silver watch pledged at the loan office
+  relevant: pawn_ticket
+  state: {discovered: [boathouse_ledger]}
+- case: lighthouse
+  query: silver watch pledged for fifteen shillings
+  relevant: pawn_ticket
+- case: lighthouse
+  query: keeper wrote that the light failed twice this winter
+  relevant: crane_complaint
+- case: lighthouse
+  query: painting of the point under storm cloud, the beam every ten seconds
+  relevant: ada_sketchbook

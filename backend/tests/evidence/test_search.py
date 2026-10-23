@@ -5,7 +5,7 @@ import uuid
 from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 import sqlalchemy as sa
@@ -113,8 +113,8 @@ def indexed() -> Iterator[Any]:
         )
 
 
-def ranked(retriever: str, rank: int, doc: str) -> Ranked:
-    return Ranked(retriever, rank, doc, doc, "memo", (), "")  # type: ignore[arg-type]
+def ranked(retriever: Literal["vector", "text"], rank: int, doc: str) -> Ranked:
+    return Ranked(retriever, rank, doc, doc, "memo", (), "")
 
 
 def test_rrf_merges_two_lists_in_a_known_order() -> None:
