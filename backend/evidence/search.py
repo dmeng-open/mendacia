@@ -68,8 +68,7 @@ class CaseMismatch(ValueError):
 class PlayerScope:
     subject: AuthContext
     case: Case
-    policy: PolicyContext
-    visible: frozenset[Id]
+    state: GameState
 
     @classmethod
     def of(cls, subject: AuthContext, case: Case, state: GameState) -> "PlayerScope":
@@ -77,13 +76,17 @@ class PlayerScope:
             raise NotAPlayer(subject.actor_type)
         if case_version(case) != subject.case_version or state.case_id != case.id:
             raise CaseMismatch(case.id)
-        policy = PolicyContext(
-            subject.state_version,
-            unlocks=frozenset({*state.discovered, *state.opened}),
-            purpose=ACTION,
-        )
-        visible = frozenset(d.id for d in visible_documents(case, state.discovered, state.opened))
-        return cls(subject, case, policy, visible)
+        return cls(subject, case, state)
+
+    @property
+    def visible(self) -> frozenset[Id]:
+        docs = visible_documents(self.case, self.state.discovered, self.state.opened)
+        return frozenset(d.id for d in docs)
+
+    @property
+    def policy(self) -> PolicyContext:
+        unlocks = frozenset({*self.state.discovered, *self.state.opened})
+        return PolicyContext(self.subject.state_version, unlocks=unlocks, purpose=ACTION)
 
 
 @dataclass(frozen=True)
@@ -110,7 +113,8 @@ class Ranked:
 
 
 def normalize_query(raw: str) -> str:
-    return " ".join(raw.split())[:MAX_QUERY_CHARS].strip()
+    printable = "".join(ch for ch in raw if ch != "\x00" and not 0xD800 <= ord(ch) <= 0xDFFF)
+    return " ".join(printable.split())[:MAX_QUERY_CHARS].strip()
 
 
 def fuse(rows: Sequence[Ranked], k: int = RRF_K) -> list[Hit]:
@@ -192,6 +196,8 @@ class AuthorizedRetriever:
 
     def _recheck(self, ctx: PlayerScope, hits: list[Hit]) -> tuple[list[Hit], list[AuditRow]]:
         docs = {d.id: d for d in ctx.case.documents}
+        version = case_version(ctx.case)
+        policy = ctx.policy
         kept: list[Hit] = []
         leaks: list[AuditRow] = []
         for hit in hits:
@@ -203,11 +209,11 @@ class AuthorizedRetriever:
                 resource = Resource(
                     "document",
                     doc.id,
-                    ctx.subject.case_version,
+                    version,
                     "player",
                     visibility=doc.visibility,
                 )
-                decision = authorize(ctx.subject, "open_document", resource, ctx.policy)
+                decision = authorize(ctx.subject, "open_document", resource, policy)
             if decision.allowed:
                 kept.append(hit)
             else:
