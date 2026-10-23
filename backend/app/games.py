@@ -190,7 +190,7 @@ class GameService:
             sync_engine(engine.url.render_as_string(hide_password=False))
         )
         self._timeout = timeout_s
-        self._inflight: dict[tuple[str, str], asyncio.Future[Outcome]] = {}
+        self._locks: dict[str, asyncio.Lock] = {}
         self._handlers: dict[ToolName, Handler] = {
             "ask_question": self._ask,
             "confront_evidence": self._ask,
@@ -235,17 +235,8 @@ class GameService:
         expected_version: int | None,
         on_stage: OnStage | None = None,
     ) -> Outcome:
-        flight = (session.game_id, key)
-        running = self._inflight.get(flight)
-        if running is None:
-            running = asyncio.ensure_future(
-                self._settle(session, tool, args, key, expected_version, on_stage)
-            )
-            self._inflight[flight] = running
-            running.add_done_callback(lambda _: self._inflight.pop(flight, None))
-            return await asyncio.shield(running)
-        out = await asyncio.shield(running)
-        return out.model_copy(update={"replayed": True})
+        async with self._locks.setdefault(session.game_id, asyncio.Lock()):
+            return await self._settle(session, tool, args, key, expected_version, on_stage)
 
     async def search(self, session: Session, query: str) -> Outcome:
         args = {"query": query}
@@ -268,19 +259,35 @@ class GameService:
             timeline=timeline(g.case),
         )
 
-    async def honeypot(self, game_id: str) -> None:
+    async def honeypot(self, game_id: str, owner: Session | None) -> None:
+        owned = owner is not None and owner.game_id == game_id
         async with self._engine.begin() as conn:
+            query = sa.update(GAMES).where(GAMES.c.id == game_id)
+            if owned:
+                assert owner is not None
+                query = query.where(GAMES.c.session_digest == owner.digest)
+            else:
+                query = query.where(sa.false())
             row = (
                 await conn.execute(
-                    sa.update(GAMES)
-                    .where(GAMES.c.id == game_id)
-                    .values(abuse_flag=True)
-                    .returning(GAMES.c.case_version, GAMES.c.state_version)
+                    query.values(abuse_flag=True).returning(
+                        GAMES.c.case_version, GAMES.c.state_version
+                    )
                 )
             ).first()
+            if row is None:
+                row = (
+                    await conn.execute(
+                        sa.select(GAMES.c.case_version, GAMES.c.state_version).where(
+                            GAMES.c.id == game_id
+                        )
+                    )
+                ).first()
+                owned = False
         if row is not None:
             ctx = AuthContext(game_id, "player", game_id, row.case_version, row.state_version)
-            await self._broker.record(ctx, "honeypot", uuid.uuid4().hex, "honeypot", allowed=False)
+            reason = "honeypot" if owned else "honeypot_anonymous"
+            await self._broker.record(ctx, "honeypot", uuid.uuid4().hex, reason, allowed=False)
 
     async def _settle(
         self,
@@ -326,6 +333,7 @@ class GameService:
         if stored is not None:
             return await self._replay(g, tool, raw, key, stored)
         if expected_version is not None and expected_version != g.version:
+            await self._broker.record(g.ctx, tool, key, "stale_state", allowed=False)
             raise Denied("stale_state")
         async with self._broker.authorized_call(g.ctx, tool, raw, key) as call:
             return await self._handlers[call.tool](g, call, on_stage)
@@ -334,6 +342,7 @@ class GameService:
         self, g: Loaded, tool: str, raw: Mapping[str, object], key: str, stored: Stored
     ) -> Outcome:
         if tool not in self._broker.tools:
+            await self._broker.record(g.ctx, tool, key, "bad_request", allowed=False)
             raise Denied("bad_request")
         name = cast(ToolName, tool)
         try:
@@ -341,6 +350,7 @@ class GameService:
         except ValidationError:
             same = False
         if not same:
+            await self._broker.record(g.ctx, name, key, "bad_request", allowed=False)
             raise Denied("bad_request")
         await self._broker.record(g.ctx, name, key, "replayed", allowed=True)
         return stored.outcome.model_copy(update={"view": g.view, "replayed": True})

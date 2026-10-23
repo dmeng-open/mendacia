@@ -138,3 +138,57 @@ def test_the_honeypot_404s_logs_and_flags_the_game(client: TestClient) -> None:
     assert flag is True
     assert reasons == ["honeypot"]
     assert "/games/{game_id}/solution" not in client.get("/openapi.json").json()["paths"]
+
+
+def honeypot_rows(game_id: str) -> tuple[bool, list[str]]:
+    with sa.create_engine(os.environ["DATABASE_URL"]).connect() as conn:
+        flag = conn.scalar(sa.text("select abuse_flag from games where id = :g"), {"g": game_id})
+        reasons = conn.scalars(
+            sa.text(
+                "select reason_code from security_events where game_id = :g and action = 'honeypot'"
+            ),
+            {"g": game_id},
+        ).all()
+    return bool(flag), list(reasons)
+
+
+def test_a_stranger_hitting_the_honeypot_cannot_cool_down_the_owner(client: TestClient) -> None:
+    p = Player(client)
+    with TestClient(client.app) as stranger:
+        for _ in range(8):
+            assert stranger.get(f"/games/{p.id}/solution").status_code == 404
+    assert honeypot_rows(p.id) == (False, ["honeypot_anonymous"] * 8)
+    done = p.ask(p.suspect("Mrs. Pike"), "Where were you at 10pm?")[-1]
+    assert done["code"] is None and done["questions_left"] == 19
+
+
+def test_raw_ids_over_http_are_refused_without_a_model_call(client: TestClient) -> None:
+    p = Player(client)
+    done = p.ask("mrs_pike", "Where were you at 10pm?")[-1]
+    assert done["code"] is not None
+    assert p.refresh()["questions_left"] == 20
+
+
+def test_stale_and_reused_key_refusals_write_their_audit_rows(client: TestClient) -> None:
+    p = Player(client)
+    key = uuid.uuid4().hex
+    assert p.post("/hint", {"state_version": p.version}, key=key).status_code == 200
+    assert p.post("/hint", {"state_version": 0}).status_code == 409
+    reused = p.post("/documents/dinner_menu/open", {"state_version": p.version}, key=key)
+    assert reused.status_code == 400
+    with sa.create_engine(os.environ["DATABASE_URL"]).connect() as conn:
+        reasons = conn.scalars(
+            sa.text(
+                "select reason_code from security_events where game_id = :g and decision = 'deny'"
+            ),
+            {"g": p.id},
+        ).all()
+    assert sorted(reasons) == ["bad_request", "stale_state"]
+
+
+def test_an_oversized_ask_frame_is_refused_before_parsing(client: TestClient) -> None:
+    p = Player(client)
+    frame = json.dumps({"question": "x" * 9000})
+    with client.websocket_connect(f"/games/{p.id}/ask") as ws:
+        ws.send_text(frame)
+        assert ws.receive_json()["code"] == "bad_request"

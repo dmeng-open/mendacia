@@ -50,7 +50,7 @@ class Handles:
         return f"h_{mac[:10]}"
 
     def parse(self, shown: str, among: Iterable[Id]) -> str:
-        return next((raw for raw in among if self.show(raw) == shown), shown)
+        return next((raw for raw in among if self.show(raw) == shown), "")
 
 
 class PublicSuspect(BaseModel):
@@ -176,7 +176,7 @@ class AskMessage(BaseModel):
     idempotency_key: str = Field(min_length=8, max_length=64)
     state_version: int
     suspect: str
-    question: str
+    question: str = Field(max_length=500)
     present: list[str] = []
     documents: list[str] = []
 

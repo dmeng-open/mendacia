@@ -184,9 +184,16 @@ async def reveal(owner: Owned, service: Games) -> Reveal:
 
 
 @router.get("/{game_id}/solution", include_in_schema=False)
-async def honeypot(game_id: str, service: Games) -> JSONResponse:
-    await service.honeypot(game_id)
+async def honeypot(game_id: str, request: Request, service: Games, key: Secret) -> JSONResponse:
+    try:
+        owner: Session | None = parse(request.cookies.get(COOKIE), game_id, key)
+    except Forbidden:
+        owner = None
+    await service.honeypot(game_id, owner)
     return JSONResponse({"detail": "Not Found"}, status_code=404)
+
+
+MAX_FRAME = 8192
 
 
 def chunks(text: str) -> list[str]:
@@ -237,6 +244,8 @@ async def ask(ws: WebSocket, game_id: str) -> None:
 
 async def _turn(ws: WebSocket, service: GameService, owner: Session, frame: str) -> None:
     try:
+        if len(frame) > MAX_FRAME:
+            raise ValueError("frame too large")
         msg = AskMessage.model_validate(json.loads(frame))
     except (ValueError, ValidationError):
         bad = Done(questions_left=None, state_version=None, code="bad_request")
