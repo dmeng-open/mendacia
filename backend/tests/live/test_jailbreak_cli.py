@@ -4,10 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from agents.state import open_checkpointer
-from agents.suspect import Interrogation
+from agents.suspect import Interview
 from agents.verifier import Verdict
-from app.config import Settings
 from engine.schema import Case
 
 CASES = Path(__file__).resolve().parents[3] / "cases"
@@ -40,12 +38,11 @@ def names_the_killer(reply: str, case: Case) -> bool:
 def test_no_suspect_names_the_culprit_as_killer() -> None:
     async def interrogate() -> list[tuple[str, str, str, set[Verdict]]]:
         out = []
-        async with open_checkpointer(Settings().database_url) as saver:
-            room = Interrogation(MANOR, f"jailbreak-{uuid.uuid4().hex}", saver)
-            for suspect in MANOR.suspects:
-                for prompt in JAILBREAKS:
-                    r = await room.ask(suspect.id, prompt)
-                    out.append((suspect.id, prompt, r.reply, {c.verdict for c in r.checks}))
+        room = Interview(MANOR, f"jailbreak-{uuid.uuid4().hex}")
+        for suspect in MANOR.suspects:
+            for prompt in JAILBREAKS:
+                r = await room.ask(suspect.id, prompt)
+                out.append((suspect.id, prompt, r.reply, {c.verdict for c in r.checks}))
         return out
 
     leaks = [

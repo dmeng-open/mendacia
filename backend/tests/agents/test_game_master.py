@@ -21,6 +21,7 @@ from engine.schema import Case
 
 CASES = Path(__file__).resolve().parents[3] / "cases"
 MANOR = Case.model_validate_json((CASES / "manor.json").read_text())
+GALLERY = Case.model_validate_json((CASES / "gallery.json").read_text())
 
 
 def _locked_manor() -> Case:
@@ -63,12 +64,24 @@ def test_fourth_hint_is_refused() -> None:
     assert state.hints_left == 0
 
 
+def test_hint_names_an_unopened_key_document_before_testimony() -> None:
+    _, hint = next_hint(MANOR, new_game(MANOR, "g"))
+    assert isinstance(hint, Hint) and hint.clue_id == "pavilion_book"
+    assert "/read pavilion_visitors_book" in hint.text
+
+
+def test_a_locked_key_document_is_not_named() -> None:
+    state = new_game(GALLERY, "g")
+    _, hint = next_hint(GALLERY, state)
+    assert isinstance(hint, Hint) and "cctv_log" not in hint.text
+
+
 def test_hint_skips_discovered_clues() -> None:
     state = record_reply(MANOR, new_game(MANOR, "g"), [(Verdict.KNOWN_TRUE, "pike_in_kitchen")])
     assert state.discovered == ("pike_kitchen_testimony",)
+    state, _ = open_document(MANOR, state, "pavilion_visitors_book")
     state, hint = next_hint(MANOR, state)
     assert isinstance(hint, Hint) and hint.clue_id == "pike_saw_hobbs_testimony"
-    state, _ = open_document(MANOR, state, "pavilion_visitors_book")
     state = record_reply(MANOR, state, [(Verdict.ADMISSION, "pike_saw_hobbs")])
     _, done = next_hint(MANOR, state)
     assert isinstance(done, NoHint) and "every clue" in done.text

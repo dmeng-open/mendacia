@@ -14,8 +14,7 @@ import yaml
 from agents.claims import Claim
 from agents.ledger import LieStatus
 from agents.screening import screen_input
-from agents.state import open_checkpointer
-from agents.suspect import SUSPECT, Interrogation, TurnReport, narrates
+from agents.suspect import SUSPECT, Interview, TurnReport, narrates
 from agents.verifier import Verdict, exposed_facts, leaks_canary
 from app.config import Settings
 from app.db import sync_engine
@@ -101,7 +100,7 @@ def leaks(
     return found
 
 
-async def play(case: Case, room: Interrogation, kind: Kind, spec: dict[str, Any]) -> Outcome:
+async def play(case: Case, room: Interview, kind: Kind, spec: dict[str, Any]) -> Outcome:
     label = spec.get("class", "normal")
     shown: set[str] = set()
     screened: list[str] = []
@@ -115,7 +114,7 @@ async def play(case: Case, room: Interrogation, kind: Kind, spec: dict[str, Any]
                 screened.append(rule)
                 continue
             return Outcome(kind, spec["id"], label, False, f"screened ({rule})")
-        state = await room.state(spec["suspect"])
+        state = room.state(spec["suspect"])
         shown |= set(present)
         exposed = exposed_facts(case, shown)
         spent = {
@@ -167,23 +166,22 @@ async def run(baseline: Path = BASELINE, max_usd: float = 1.0) -> list[Outcome]:
     outcomes: list[Outcome] = []
     games: list[str] = []
     variants = [case]
-    async with open_checkpointer(Settings().database_url) as saver:
-        kinds: tuple[tuple[Kind, str], ...] = (("attack", "attacks"), ("normal", "normal"))
-        for kind, key in kinds:
-            for item in spec[key]:
-                game = f"regress-{run_id}-{item['id']}"
-                games.append(game)
-                played = with_documents(case, item)
-                variants.append(played)
-                try:
-                    outcome = await play(played, Interrogation(played, game, saver), kind, item)
-                except MissingRecording:
-                    label = item.get("class", "normal")
-                    detail = "unrecorded (record it with RECORD=1 make security-regress)"
-                    outcome = Outcome(kind, item["id"], label, False, detail)
-                outcomes.append(outcome)
-                if _spent(games) > max_usd:
-                    raise SystemExit(f"stopped: spend passed ${max_usd:.2f}")
+    kinds: tuple[tuple[Kind, str], ...] = (("attack", "attacks"), ("normal", "normal"))
+    for kind, key in kinds:
+        for item in spec[key]:
+            game = f"regress-{run_id}-{item['id']}"
+            games.append(game)
+            played = with_documents(case, item)
+            variants.append(played)
+            try:
+                outcome = await play(played, Interview(played, game), kind, item)
+            except MissingRecording:
+                label = item.get("class", "normal")
+                detail = "unrecorded (record it with RECORD=1 make security-regress)"
+                outcome = Outcome(kind, item["id"], label, False, detail)
+            outcomes.append(outcome)
+            if _spent(games) > max_usd:
+                raise SystemExit(f"stopped: spend passed ${max_usd:.2f}")
     canary = _canary_rows(variants, games) + sum(o.detail.count("canary") for o in outcomes)
     print_summary(outcomes, canary, _spent(games))
     return outcomes if canary == 0 else [*outcomes, Outcome("attack", "rows", "canary", False, "")]

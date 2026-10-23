@@ -35,7 +35,7 @@ def test_replayed_full_game_ends_correct() -> None:
         "Chain clues cited: pike_kitchen_testimony, pike_saw_hobbs_testimony, pavilion_book" in out
     )
     assert any("Clara Ashcombe killed Lord Edmund Ashcombe" in line for line in out)
-    assert game.state.questions_left == 18
+    assert game.view.questions_left == 18
 
 
 def test_screened_question_costs_nothing_and_is_logged() -> None:
@@ -50,7 +50,7 @@ def test_screened_question_costs_nothing_and_is_logged() -> None:
         )
     )
 
-    assert game.state.questions_left == 20
+    assert game.view.questions_left == 20
     assert 'Mr. Hobbs: "I don\'t follow you, Detective."' in out
     with sa.create_engine(os.environ["DATABASE_URL"]).connect() as conn:
         rows = conn.execute(

@@ -3,26 +3,23 @@ import math
 import os
 import time
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 import pytest
 import sqlalchemy as sa
 
 from agents.ledger import LieStatus
-from agents.state import SERDE, STATE_TYPES, SuspectState, open_checkpointer
-from agents.suspect import FALLBACK, Interrogation, TurnReport
+from agents.state import Talk, TurnInput
+from agents.suspect import FALLBACK, Interview, TurnReport
 from agents.verifier import Verdict
 from tests.agents.suspect_scenarios import MANOR, SCENARIOS, Turn, chosen, play
 
 DB = os.environ["DATABASE_URL"]
 
 
-def run[T](body: Callable[[Interrogation], Awaitable[T]], game_id: str | None = None) -> T:
-    async def go() -> T:
-        async with open_checkpointer(DB) as saver:
-            return await body(Interrogation(MANOR, game_id or uuid.uuid4().hex, saver))
-
-    return asyncio.run(go())
+def run[T](body: Callable[[Interview], Coroutine[Any, Any, T]], game_id: str | None = None) -> T:
+    return asyncio.run(body(Interview(MANOR, game_id or uuid.uuid4().hex)))
 
 
 def scenario(name: str, game_id: str | None = None) -> list[TurnReport]:
@@ -86,15 +83,16 @@ def test_fallback_still_commits_the_exposure() -> None:
     assert statuses(dodge) == [("clara_library_lie", LieStatus.EXPOSED, 1)]
 
 
-def test_restart_rebuilds_graph_and_keeps_ledger() -> None:
+def test_a_fresh_graph_continues_from_the_stored_talk() -> None:
     game = uuid.uuid4().hex
     first, second = chosen("lie_then_admit")
-    run(lambda room: room.ask("clara", first.question, first.present), game)
+    lie = run(lambda room: room.ask("clara", first.question, first.present), game)
+    stored = Talk.model_validate_json(lie.talk.model_dump_json())
+    assert [(e.status, e.turn) for e in stored.ledger.entries] == [(LieStatus.TOLD, 1)]
+    assert len(stored.history) == 1
 
-    async def after_restart(room: Interrogation) -> TurnReport:
-        before = await room.state("clara")
-        assert [(e.status, e.turn) for e in before.ledger.entries] == [(LieStatus.TOLD, 1)]
-        assert len(before.history) == 1
+    async def after_restart(room: Interview) -> TurnReport:
+        room.talks["clara"] = stored
         return await room.ask("clara", second.question, second.present)
 
     admit = run(after_restart, game)
@@ -102,16 +100,27 @@ def test_restart_rebuilds_graph_and_keeps_ledger() -> None:
     assert statuses(admit) == [("clara_library_lie", LieStatus.ADMITTED, 1)]
 
 
-def test_every_state_type_is_registered_with_the_serializer() -> None:
-    names = {t.__name__ for t in STATE_TYPES}
-    assert {"SuspectState", "Ledger", "LedgerEntry", "LieStatus", "Claim", "Verdict"} <= names
-    (r,) = scenario("fallback")
-    state = SuspectState(question="q", attempts=r.attempts, fell_back=True)
-    assert SuspectState.model_validate(SERDE.loads_typed(SERDE.dumps_typed(state))) == state
+def test_a_turn_writes_nothing_until_its_caller_commits() -> None:
+    first, _ = chosen("lie_then_admit")
+    game = uuid.uuid4().hex
+
+    async def body(room: Interview) -> TurnReport:
+        return await room.room.ask(
+            Talk(), "clara", TurnInput(question=first.question), state_version=7
+        )
+
+    report = asyncio.run(body(Interview(MANOR, game)))
+    with sa.create_engine(DB).connect() as conn:
+        logged = conn.execute(
+            sa.text("select count(*) from security_events where game_id = :g"), {"g": game}
+        ).scalar_one()
+    assert logged == 0
+    assert [r.action for r in report.audit] == ["retrieve", "verify", "commit_turn"]
+    assert {r.state_version for r in report.audit} == {7}
 
 
 def test_unknown_document_is_refused_before_the_turn() -> None:
-    async def body(room: Interrogation) -> None:
+    async def body(room: Interview) -> None:
         with pytest.raises(ValueError, match="unknown documents"):
             await room.ask("clara", "What is this?", documents=["no_such_doc"])
 
@@ -121,7 +130,7 @@ def test_unknown_document_is_refused_before_the_turn() -> None:
 def test_unknown_clue_is_refused_before_the_turn_and_leaves_the_thread_usable() -> None:
     first, _ = chosen("lie_then_admit")
 
-    async def body(room: Interrogation) -> TurnReport:
+    async def body(room: Interview) -> TurnReport:
         with pytest.raises(ValueError, match="unknown clues"):
             await room.ask("clara", first.question, ["no_such_clue"])
         with pytest.raises(ValueError, match="unknown suspect"):
@@ -135,12 +144,12 @@ def test_unknown_clue_is_refused_before_the_turn_and_leaves_the_thread_usable() 
 def test_concurrent_asks_on_one_suspect_run_one_after_the_other() -> None:
     first, second = chosen("lie_then_admit")
 
-    async def body(room: Interrogation) -> tuple[list[int], int]:
+    async def body(room: Interview) -> tuple[list[int], int]:
         lie, admit = await asyncio.gather(
             room.ask("clara", first.question, first.present),
             room.ask("clara", second.question, second.present),
         )
-        return [lie.turn, admit.turn], len((await room.state("clara")).history)
+        return [lie.turn, admit.turn], len(room.state("clara").history)
 
     assert run(body) == ([1, 2], 2)
 
@@ -161,14 +170,14 @@ def test_empty_draft_falls_back_without_extraction_and_logs_a_row() -> None:
 def test_replayed_turn_overhead() -> None:
     script = chosen("lie_then_admit")
 
-    async def turns(room: Interrogation) -> list[float]:
+    async def turns(room: Interview) -> list[float]:
         out = []
         for _ in range(50):
             for t in script:
                 started = time.perf_counter()
                 await room.ask("clara", t.question, t.present)
                 out.append(time.perf_counter() - started)
-            room.game_id = uuid.uuid4().hex
+            room.talks.clear()
         return out
 
     durations = sorted(run(turns))

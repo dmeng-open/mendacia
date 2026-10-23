@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from app.llm import ModelRole
+from security.tool_broker import TOOLS
 
 Layer = Literal["truth", "knowledge", "player", "conversation"]
 
@@ -52,7 +53,12 @@ AGENTS = (
             "security.events",
             "security.grants",
             "security.policy",
+            "security.tool_broker",
+            "app.games",
+            "app.routes.games",
+            "app.cli",
         ),
+        tools=tuple(TOOLS),
         verified_by="deterministic rules",
     ),
     AgentManifest(
@@ -87,6 +93,7 @@ AGENTS = (
         frozenset({"detective"}),
         frozenset({"player"}),
         "player",
+        tools=tuple(t for t, spec in TOOLS.items() if "detective_bot" in spec.actors),
         planned="P5-1",
     ),
     AgentManifest(

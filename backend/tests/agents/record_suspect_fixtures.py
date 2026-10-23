@@ -7,8 +7,7 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from agents.state import open_checkpointer
-from agents.suspect import Interrogation
+from agents.suspect import Interview
 from app import llm_replay
 from app.config import Settings
 from app.llm_replay import LlmMode, Recording
@@ -34,28 +33,27 @@ def _promote(staging: Path, known: set[str], name: str, script: Script) -> None:
 
 async def _record(scenario: Scenario, root: Path, budget: float) -> tuple[int, float]:
     spent = 0.0
-    async with open_checkpointer(Settings().database_url) as saver:
-        for i, script in enumerate(scenario.candidates):
-            for k in range(SAMPLES):
-                staging = root / scenario.name / f"{i}-{k}"
-                shutil.copytree(FIXTURES, staging)
-                known = {f.name for f in staging.glob("*.json")}
-                llm_replay.FIXTURES_DIR = staging
-                room = Interrogation(MANOR, f"record-{uuid.uuid4().hex[:8]}", saver)
-                reports = await play(room, scenario.suspect, script)
-                spent += _spent(staging, known)
-                matched = scenario.expect(reports)
-                for r in reports:
-                    for a in r.attempts:
-                        print(f"  [{i}.{k}] {a.draft!r}")
-                        for line in a.feedback.splitlines():
-                            print(f"      {line}")
-                print(f"{scenario.name} candidate {i} sample {k}: {'MATCH' if matched else '-'}")
-                if matched:
-                    _promote(staging, known, scenario.name, script)
-                    return i, spent
-                if spent > budget:
-                    raise SystemExit(f"{scenario.name}: budget spent (${spent:.4f})")
+    for i, script in enumerate(scenario.candidates):
+        for k in range(SAMPLES):
+            staging = root / scenario.name / f"{i}-{k}"
+            shutil.copytree(FIXTURES, staging)
+            known = {f.name for f in staging.glob("*.json")}
+            llm_replay.FIXTURES_DIR = staging
+            room = Interview(MANOR, f"record-{uuid.uuid4().hex[:8]}")
+            reports = await play(room, scenario.suspect, script)
+            spent += _spent(staging, known)
+            matched = scenario.expect(reports)
+            for r in reports:
+                for a in r.attempts:
+                    print(f"  [{i}.{k}] {a.draft!r}")
+                    for line in a.feedback.splitlines():
+                        print(f"      {line}")
+            print(f"{scenario.name} candidate {i} sample {k}: {'MATCH' if matched else '-'}")
+            if matched:
+                _promote(staging, known, scenario.name, script)
+                return i, spent
+            if spent > budget:
+                raise SystemExit(f"{scenario.name}: budget spent (${spent:.4f})")
     raise SystemExit(f"{scenario.name}: no candidate matched (spent ${spent:.4f})")
 
 
