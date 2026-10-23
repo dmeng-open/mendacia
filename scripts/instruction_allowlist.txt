@@ -2,3 +2,4 @@
 localhost
 github.com
 code.claude.com
+nodejs.org

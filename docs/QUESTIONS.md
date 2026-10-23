@@ -45,3 +45,22 @@ Default taken: the code ships as is. Options for the operator:
 1. Judge the 8 s budget on turns that release a first draft, and track rewrite turns separately.
 2. Raise the budget to cover a full rewrite loop (for example 12 s).
 3. Cut the loop: fewer drafts, a faster extractor model, or fall back after one rewrite.
+
+## P3-6: "locked documents shown as locked" would leak how many documents are still hidden
+
+The plan asks `ArchivePanel.tsx` to show locked documents as locked. The game view lists only visible documents; a locked document never reaches the browser (ADR 008). Listing locked documents, even as blank placeholders, would tell the player how many documents the case still hides, which is the kind of hidden statistic open decision 5 rules out before the reveal.
+
+Default taken: visible documents the player has not opened render as sealed, with a lock icon and an "Open" button. Locked documents render nothing, and the UI shows no document count. Options for the operator:
+
+1. Keep sealed-but-visible documents only (the default).
+2. Show a fixed line such as "Some records are still out of reach" whether or not any are locked, which tells the player nothing about the count.
+3. Add locked documents to the view as placeholders and accept the count leak.
+
+## P3-6: the reveal has raw ids and no names or clue text
+
+`GET /games/{id}/reveal` returns the culprit, the accused, and the chain as raw case ids, while the game view used per-game handles and never sent raw ids. The browser cannot map the reveal back to names or clue descriptions, and showing raw ids such as `pike_kitchen_testimony` would look broken.
+
+Default taken: the reveal page shows the ruling text, "You accused <name>" and the cited clue descriptions from the tab's own journal (kept when the player accused), "You cited N of the M clues in the solution chain", and the timeline. It never renders a raw id. A wrong accusation therefore does not name the true culprit beyond what the timeline says. Options for the operator:
+
+1. Keep the journal-based reveal (the default).
+2. Add the culprit's name, the accused's name, and the chain clue descriptions to `Reveal` in a backend follow-up, which also lets another tab or device show the full reveal.

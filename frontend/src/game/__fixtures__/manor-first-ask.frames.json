@@ -1,0 +1,11 @@
+[
+  "{\"type\":\"thinking\"}",
+  "{\"type\":\"validating\"}",
+  "{\"type\":\"chunk\",\"text\":\"I was in the kitchen \"}",
+  "{\"type\":\"chunk\",\"text\":\"at ten o'clock, detective, with \"}",
+  "{\"type\":\"chunk\",\"text\":\"the kettle on and the \"}",
+  "{\"type\":\"chunk\",\"text\":\"bread rising. Ask me anything \"}",
+  "{\"type\":\"chunk\",\"text\":\"you like about my own \"}",
+  "{\"type\":\"chunk\",\"text\":\"movements and I'll answer plainly.\"}",
+  "{\"type\":\"done\",\"questions_left\":19,\"state_version\":1,\"new_clues\":[{\"id\":\"h_6d20713f2f\",\"description\":\"Mrs. Pike was in the kitchen at 10pm, plating the late supper.\"}],\"code\":null,\"replayed\":false,\"retry_after_s\":null}"
+]
