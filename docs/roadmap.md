@@ -386,6 +386,7 @@ FastAPI, PostgreSQL with pgvector, the LiteLLM wrapper with cost logging, record
   - submissions with sandboxed parsing, size and nesting limits, a malicious-attachment scan, privacy and copyright review, and a takedown flow;
   - a third-party tool and MCP registry that records the provider, tool schema, allowed actors, scope, side effects, rate limit, and approval requirement, and runs the instruction scan and agent manifest gate when a tool registers (unknown servers denied);
   - friend clubs and group leaderboards;
+  - branch protection and CODEOWNERS on instruction files and `infra/` once a second maintainer joins;
   - capacity planning and load tests;
   - incident response runbooks.
 - **Architecture change, each step justified by a measurement:**

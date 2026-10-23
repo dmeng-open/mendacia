@@ -167,7 +167,7 @@ Agents in this repo follow `CLAUDE.md`, `.claude/**`, and `docs/plan.md`, and ru
 - invisible or bidi Unicode (zero-width, tag characters U+E0000–E007F, bidi overrides), and
 - URLs outside an allowlist.
 
-Each failure names the file and line. The same Unicode check runs on cases and evidence documents, which feed prompts. CODEOWNERS covers these paths, so a change to them needs the operator's review.
+Each failure names the file and line. The same Unicode check runs on cases and evidence documents, which feed prompts. A change to these paths reaches `main` only through a PR the operator reviews and merges.
 
 ### 6.8 Threat model (v2.1 §6.4)
 
@@ -180,7 +180,7 @@ Each failure names the file and line. The same Unicode check runs on cases and e
 | WebSocket, client, share links | Early text, another player's game | Verified release, session ownership, minimal projections |
 | Replay, logs, keys | Leaked secrets in debug output | Redaction, keys never in replay, Secret Manager |
 | Rankings, purchases | Replay, score padding, payment bypass | Idempotent state machine, server-side scoring, entitlements kept separate from game authorization |
-| Agent instruction files | Poisoned `SKILL.md` or `CLAUDE.md` | `scan-instructions`, CODEOWNERS, branch protection |
+| Agent instruction files | Poisoned `SKILL.md` or `CLAUDE.md` | `scan-instructions` in CI, operator review of every PR |
 
 Trust order, lowest first: client < untrusted input and evidence < model output < broker-scoped tool execution < rules and database transactions. A model cannot raise its own privileges.
 

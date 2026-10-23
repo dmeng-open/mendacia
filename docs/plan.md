@@ -33,8 +33,6 @@ The operator set live verification to two lanes per PR. Each PR has Lane 1, the 
 - [ ] State the protocol and this plan to the operator, then stop. Start execution only on the operator's explicit go.
 - [ ] Confirm the operator items below exist before the first owner starts. Each one is a decision or a credential only the operator holds.
   - [ ] `main` holds this `docs/plan.md`, `docs/spec.md`, and `docs/roadmap.md`.
-  - [ ] Branch protection on `main`. Every change goes through a PR, no direct push, no admin bypass, and CODEOWNERS review is required for the paths P3-1 lists. This is the control the RedWraith demo bypassed (Appendix D).
-  - [ ] Fine-grained GitHub tokens for agent sessions, scoped to this repository, with no admin rights.
   - [ ] A Claude Code cloud environment named `mendacia`. Its secrets hold one provider key per model, plus `MODEL_FAST`, `MODEL_STRONG`, `MODEL_EMBED`, `EMBED_DIM`, and `EVAL_MAX_USD`. Its network allowlist reaches PyPI, npm, the Ubuntu apt mirrors, GitHub, and each model provider host.
   - [ ] The embedding provider for `MODEL_EMBED`. Anthropic has no embedding model, so this needs a second provider key.
   - [ ] GitHub Actions secrets for the live-eval workflow in P5-2.
@@ -163,7 +161,7 @@ Gaps Phase 3 closes:
 **Files.**
 
 - [ ] Create `scripts/scan_instructions.py` and `scripts/instruction_allowlist.txt`.
-- [ ] Create `.github/CODEOWNERS` and `.github/dependabot.yml`.
+- [ ] Create `.github/dependabot.yml`.
 - [ ] Edit `.github/workflows/ci.yml`, `Makefile`, and `backend/pyproject.toml`.
 - [ ] Create `backend/tests/test_scan_instructions.py` and fixtures under `backend/tests/fixtures/instructions/`.
 - [ ] Create `docs/adr/006-agent-instruction-supply-chain.md`.
@@ -176,10 +174,9 @@ Gaps Phase 3 closes:
   - [ ] `invisible_unicode`: zero-width characters (U+200B–U+200D, U+2060, U+FEFF inside text), tag characters (U+E0000–U+E007F), and bidi controls (U+202A–U+202E, U+2066–U+2069).
   - [ ] `unlisted_url`: any URL whose host is not in `instruction_allowlist.txt`. The allowlist starts with `localhost` and the hosts already used on `main`.
 - [ ] Add `make scan-instructions` and run it in `make ci` and in a separate `instructions` CI job.
-- [ ] Add `.github/CODEOWNERS` that assigns the operator to `CLAUDE.md`, `.claude/`, `docs/plan.md`, `docs/spec.md`, `docs/roadmap.md`, `scripts/`, `.github/`, and `infra/`.
 - [ ] Add `pip-audit` to the backend dev dependencies and `make audit`, which runs `pip-audit` on `backend/uv.lock` and `npm audit --omit=dev --audit-level=high` when `frontend/package-lock.json` exists. Run it in a CI job that fails on high or critical.
 - [ ] Add `dependabot.yml` for `pip` (`/backend`), `npm` (`/frontend`), and `github-actions`, weekly.
-- [ ] Write ADR 006. It covers why instruction files are code, what the scan catches and misses, the operator items for branch protection and token scope, and the RedWraith attack chain it answers.
+- [ ] Write ADR 006. It covers why instruction files are code, what the scan catches and misses, and the RedWraith attack chain it answers. The operator is the only maintainer and merges every PR, so the scan in CI plus that review is the control; branch protection and CODEOWNERS wait until a second maintainer joins (roadmap stage G).
 
 **You see.**
 
@@ -1064,7 +1061,7 @@ Run with `clingo.Control(["0", "--project"])` and `#show culprit/1.` to enumerat
 
 **Guard false positives hurt the first game.** A guard that blocks normal questions breaks v2.1's unbreakable clauses as surely as a leak does. P5-2 gates the false-reject rate at 5 percent and keeps the gameplay set beside the attack set.
 
-**The scan flags legitimate docs.** `scan-instructions` may flag a URL or a character in a real document. The allowlist is a reviewed file under CODEOWNERS, never an inline skip.
+**The scan flags legitimate docs.** `scan-instructions` may flag a URL or a character in a real document. The allowlist is a reviewed file changed only by PR, never an inline skip.
 
 **Guard latency on the 5-minute first game.** Authorization, broker, and verification add time to every turn. P3-5 caps guard latency p95 at 50 ms and the turn at 8 s.
 
@@ -1098,7 +1095,7 @@ v2.1 ADR-S01 to S06 map to ADR 007, 010, 011, 009, 012, and 015.
 
 | What the talk showed | What Mendacia does with it | Lands in |
 |---|---|---|
-| An autonomous attack chain poisoned a project `SKILL.md`. It used a stolen developer token, merged directly with admin rights, and added a prerequisite that downloaded a PowerShell install script and ran it before each day's first PR review | Scan agent-instruction files, require CODEOWNERS review, enforce branch protection with no admin bypass, use fine-grained tokens | P3-1, operator items |
+| An autonomous attack chain poisoned a project `SKILL.md`. It used a stolen developer token, merged directly with admin rights, and added a prerequisite that downloaded a PowerShell install script and ran it before each day's first PR review | Scan agent-instruction files in CI; the operator reviews and merges every PR. Branch protection and CODEOWNERS wait for a second maintainer | P3-1 |
 | A skill scanner flagged Unicode steganography found by YARA | The invisible-Unicode rule for instruction files, cases, documents, and generated cases | P3-1, P3-3, P4-1 |
 | An agentic registry and agent scans that infer capabilities from code against an overreach threshold | Agent manifests and the `make agent-inventory` AST gate | P3-2 |
 | A policy restricted an agent to read-only tools; a delete call was blocked with a 403 | Tool Broker `read_only` and `side_effect` tags, no tools for suspects, structured reason codes | P3-5 |
