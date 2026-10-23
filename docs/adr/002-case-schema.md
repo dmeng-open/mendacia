@@ -26,3 +26,5 @@ One `model_validator` on `Case` collects every dangling reference and raises `Da
 ## Consequences
 
 `python -m engine.cli validate <path>...` and `make validate-cases` print `OK <path>` or `FAIL <path>` and the problem lines, and exit 1 on any failure. A schema change after this PR updates the three cases in `cases/`, the solver, and the tests in the same PR, and adds an ADR.
+
+- ADR 008 adds `source` and `visibility` to `EvidenceDoc` and a reference check on `unlocked_by`.

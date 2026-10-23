@@ -1,0 +1,11 @@
+/read cctv_log
+/read security_desk_memo
+/read cctv_log
+/read catering_invoice
+/status
+/suspect theo_vance
+/ask Where were you at 7pm?
+/suspect pia_lund
+/ask Whom did you see at 7pm?
+/status
+/accuse sam_okafor theo_cafe_testimony pia_saw_theo_testimony cctv_east_hall

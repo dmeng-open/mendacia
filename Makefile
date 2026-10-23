@@ -2,7 +2,7 @@ ENV_FILE := $(if $(wildcard .env),.env,.env.example)
 ENV_NAMES := $(shell sed -n 's/^\([A-Z_]*\)=.*/\1/p' $(ENV_FILE))
 $(foreach v,$(ENV_NAMES),$(if $(filter environment,$(origin $(v))),,$(eval export $(v) := $(shell sed -n 's/^$(v)=//p' $(ENV_FILE)))))
 
-.PHONY: setup up db-create migrate api test lint typecheck ci doctor validate-cases check-case record-fixtures play-cli scan-instructions audit agent-inventory security-regress
+.PHONY: setup up db-create migrate api test lint typecheck ci doctor validate-cases check-case lint-evidence record-fixtures play-cli scan-instructions audit agent-inventory security-regress
 
 setup:
 	cd backend && uv sync --frozen
@@ -31,7 +31,7 @@ lint:
 typecheck:
 	cd backend && uv run mypy agents app engine evals migrations security tests
 
-ci: lint typecheck scan-instructions agent-inventory test security-regress
+ci: lint typecheck scan-instructions agent-inventory lint-evidence test security-regress
 
 agent-inventory:
 	cd backend && uv run python -m agents.inventory
@@ -56,6 +56,9 @@ validate-cases:
 
 check-case:
 	PYTHONPATH=backend uv run --project backend python -m engine.cli check $(CASE)
+
+lint-evidence:
+	PYTHONPATH=backend uv run --project backend python -m engine.cli lint-evidence cases/*.json
 
 record-fixtures:
 	cd backend && LLM_MODE=record uv run python -m tests.agents.record_suspect_fixtures $(SCENARIO)

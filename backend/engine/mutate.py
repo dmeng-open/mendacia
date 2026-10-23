@@ -11,6 +11,10 @@ def drop_clue(case: Case, clue_id: str) -> Case:
     data = case.model_dump(mode="json")
     data["clues"] = [c for c in data["clues"] if c["id"] != clue_id]
     data["solution_chain"] = [c for c in data["solution_chain"] if c != clue_id]
+    for doc in data["documents"]:
+        if isinstance(doc["visibility"], dict):
+            rest = [i for i in doc["visibility"]["unlocked_by"] if i != clue_id]
+            doc["visibility"] = {"unlocked_by": rest} if rest else "open"
     return Case.model_validate(data)
 
 

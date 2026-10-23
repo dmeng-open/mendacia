@@ -65,6 +65,7 @@ class Attempt(Frozen):
 class TurnInput(Frozen):
     question: str
     present: tuple[Id, ...] = ()
+    documents: tuple[Id, ...] = ()
 
 
 class SuspectState(Frozen):
@@ -74,6 +75,7 @@ class SuspectState(Frozen):
 
     question: str = ""
     present: tuple[Id, ...] = ()
+    documents: tuple[Id, ...] = ()
     attempts: tuple[Attempt, ...] = ()
     fell_back: bool = False
     trace_id: str = ""

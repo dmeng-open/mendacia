@@ -7,6 +7,7 @@ from pathlib import Path
 
 from agents.events import log_event
 from agents.game_master import (
+    DocumentLocked,
     GameState,
     Hint,
     new_game,
@@ -24,7 +25,7 @@ from app.config import Settings
 from engine.schema import Case, Id
 
 HELP = (
-    "/suspect <id>  /ask <question>  /read <doc_id>  /present <clue_id>  /hint\n"
+    "/suspect <id>  /ask <question>  /read <doc_id>  /present <clue_or_doc_id>  /hint\n"
     "/accuse <suspect_id> <clue_id> <clue_id>...  /status  /quit"
 )
 
@@ -39,6 +40,7 @@ class Game:
         self.state: GameState = new_game(case, room.game_id)
         self.suspect: Id | None = None
         self.pending: list[Id] = []
+        self.pending_docs: list[Id] = []
         self.over = False
         self.turns: dict[Id, int] = {}
 
@@ -47,9 +49,12 @@ class Game:
         self.say("Suspects:")
         for s in self.case.suspects:
             self.say(f"  {s.id:<12} {s.name}: {s.description}")
-        self.say("Documents: " + ", ".join(d.id for d in self.case.documents))
+        self.say(self._documents())
         self.say(self._budget())
         self.say(HELP)
+
+    def _documents(self) -> str:
+        return "Documents: " + ", ".join(d.id for d in self.state.visible(self.case))
 
     def _budget(self) -> str:
         q, h = self.state.questions_left, self.state.hints_left
@@ -91,6 +96,7 @@ class Game:
             return
         self.suspect = suspect
         self.pending = []
+        self.pending_docs = []
         self.say(f"You sit down with {self._name(suspect)}.")
 
     async def _ask(self, question: str) -> None:
@@ -119,7 +125,8 @@ class Game:
             self.say(f"(That cost no question.) {self._budget()}")
             return
         present, self.pending = self.pending, []
-        report = await self.room.ask(self.suspect, question, present)
+        handed, self.pending_docs = self.pending_docs, []
+        report = await self.room.ask(self.suspect, question, present, handed)
         self.turns[self.suspect] = turn
         before = set(self.state.discovered)
         self.state = record_reply(
@@ -137,20 +144,26 @@ class Game:
         try:
             self.state, doc = open_document(self.case, self.state, doc_id)
         except KeyError:
-            self.say("No such document. Documents: " + ", ".join(d.id for d in self.case.documents))
+            self.say(f"No such document. {self._documents()}")
+            return
+        except DocumentLocked:
+            self.say("That document is locked.")
             return
         self.say(f"{doc.title}\n  {doc.body}")
         self._announce(before)
 
-    def _present(self, clue_id: str) -> None:
+    def _present(self, item_id: str) -> None:
         if self.suspect is None:
             self.say("Choose a suspect first with /suspect <id>.")
             return
-        if clue_id not in self.state.discovered:
-            self.say("You can present only a clue you have found. See /status.")
+        if item_id in self.state.opened:
+            self.pending_docs.append(item_id)
+        elif item_id in self.state.discovered:
+            self.pending.append(item_id)
+        else:
+            self.say("You can present only a clue you have found or a document you have read.")
             return
-        self.pending.append(clue_id)
-        self.say(f"You will show {clue_id} with your next question.")
+        self.say(f"You will show {item_id} with your next question.")
 
     def _hint(self) -> None:
         self.state, hint = next_hint(self.case, self.state)

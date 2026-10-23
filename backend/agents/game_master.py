@@ -4,7 +4,10 @@ from dataclasses import dataclass
 from pydantic import BaseModel, ConfigDict
 
 from agents.verifier import Verdict
-from engine.schema import Case, Clue, EvidenceDoc, Id
+from engine.evidence import obtainable, visible_documents
+from engine.schema import Case, EvidenceDoc, Id, Unlock
+from security.context import AuthContext, case_version
+from security.policy import PolicyContext, Resource, authorize
 
 QUESTIONS = 20
 HINTS = 3
@@ -23,6 +26,9 @@ class GameState(BaseModel):
     opened: tuple[Id, ...] = ()
     stated_facts: tuple[Id, ...] = ()
 
+    def visible(self, case: Case) -> tuple[EvidenceDoc, ...]:
+        return visible_documents(case, self.discovered, self.opened)
+
     def discover(self, case: Case) -> "GameState":
         stated = set(self.stated_facts)
         found = [
@@ -35,6 +41,12 @@ class GameState(BaseModel):
 
 def new_game(case: Case, game_id: str) -> GameState:
     return GameState(case_id=case.id, game_id=game_id)
+
+
+class DocumentLocked(Exception):
+    def __init__(self, doc_id: Id) -> None:
+        super().__init__(doc_id)
+        self.doc_id = doc_id
 
 
 @dataclass(frozen=True)
@@ -74,6 +86,12 @@ def open_document(case: Case, state: GameState, doc_id: Id) -> tuple[GameState, 
     doc = next((d for d in case.documents if d.id == doc_id), None)
     if doc is None:
         raise KeyError(doc_id)
+    version = case_version(case)
+    reader = AuthContext(state.game_id, "player", state.game_id, version, 0)
+    resource = Resource("document", doc.id, version, "player", visibility=doc.visibility)
+    unlocks = frozenset({*state.discovered, *state.opened})
+    if not authorize(reader, "open_document", resource, PolicyContext(0, unlocks=unlocks)).allowed:
+        raise DocumentLocked(doc_id)
     opened = tuple(sorted({*state.opened, doc_id}))
     return state.model_copy(update={"opened": opened}).discover(case), doc
 
@@ -84,16 +102,37 @@ def next_hint(case: Case, state: GameState) -> tuple[GameState, Hint | NoHint]:
     missing = [c for c in case.solution_chain if c not in state.discovered]
     if not missing:
         return state, NoHint("You already hold every clue you need. Make your accusation.")
-    clue = next(c for c in case.clues if c.id == missing[0])
-    spent = state.model_copy(update={"hints_left": state.hints_left - 1})
-    return spent, Hint(clue.id, _hint_text(case, clue))
+    reachable = obtainable(case)
+    for clue_id in missing:
+        text = _lead(case, state, clue_id, reachable, set())
+        if text is not None:
+            spent = state.model_copy(update={"hints_left": state.hints_left - 1})
+            return spent, Hint(clue_id, text)
+    return state, NoHint("You have no lead on that yet.")
 
 
-def _hint_text(case: Case, clue: Clue) -> str:
-    if clue.doc_id is not None:
-        doc = next(d for d in case.documents if d.id == clue.doc_id)
+def _lead(
+    case: Case, state: GameState, target: Id, reachable: frozenset[Id], seen: set[Id]
+) -> str | None:
+    seen.add(target)
+    clue = next((c for c in case.clues if c.id == target), None)
+    if clue is not None and clue.doc_id is None:
+        return _testimony_hint(case, clue.reveals[0])
+    doc_id = clue.doc_id if clue is not None else target
+    doc = next(d for d in case.documents if d.id == doc_id)
+    if doc in state.visible(case):
         return f"Read {doc.title} (/read {doc.id})."
-    fact = next(f for f in case.facts if f.id == clue.reveals[0])
+    assert isinstance(doc.visibility, Unlock)
+    for unlocker in doc.visibility.unlocked_by:
+        if unlocker in reachable and unlocker not in seen:
+            text = _lead(case, state, unlocker, reachable, seen)
+            if text is not None:
+                return text
+    return None
+
+
+def _testimony_hint(case: Case, fact_id: Id) -> str:
+    fact = next(f for f in case.facts if f.id == fact_id)
     names = {s.id: s.name for s in case.suspects}
     secret_of = {f for hidden in case.secrets.values() for f in hidden}
     knowers = [p for p in fact.known_by if p in names and fact.id not in secret_of]

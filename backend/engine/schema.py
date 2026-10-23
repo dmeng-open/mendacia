@@ -83,11 +83,20 @@ class Clue(_Model):
         return self
 
 
+class Unlock(_Model):
+    unlocked_by: tuple[Id, ...] = Field(min_length=1)
+
+
+Visibility = Literal["open"] | Unlock
+
+
 class EvidenceDoc(_Model):
     id: Id
     title: str
+    source: Id
     body: str
     is_key: bool
+    visibility: Visibility
 
 
 class Crime(_Model):
@@ -198,6 +207,17 @@ def _reference_problems(case: Case) -> list[str]:
             check(f"clues[{i}].reveals[{j}]", fact_id, facts, "fact")
         if clue.doc_id is not None:
             check(f"clues[{i}].doc_id", clue.doc_id, documents, "document")
+
+    for i, doc in enumerate(case.documents):
+        if doc.id in clues:
+            problems.append(f"documents[{i}].id: '{doc.id}' is also a clue id")
+        if isinstance(doc.visibility, Unlock):
+            for j, ref in enumerate(doc.visibility.unlocked_by):
+                path = f"documents[{i}].visibility.unlocked_by[{j}]"
+                if ref == doc.id:
+                    problems.append(f"{path}: '{ref}' cannot unlock itself")
+                else:
+                    check(path, ref, clues | documents, "clue or document")
 
     for i, clue_id in enumerate(case.solution_chain):
         check(f"solution_chain[{i}]", clue_id, clues, "clue")

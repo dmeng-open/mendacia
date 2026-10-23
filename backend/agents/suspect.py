@@ -14,6 +14,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
 from agents import prompts
+from agents.documents import quote_document
 from agents.events import Action, Rule, log_event
 from agents.extract import ExtractionFailed, extract_claims
 from agents.ledger import LedgerEntry
@@ -92,17 +93,29 @@ class Interrogation:
     def seat(self, suspect: Id) -> Seat:
         return Seat(case=self.case, suspect=suspect, game_id=self.game_id)
 
-    async def ask(self, suspect: Id, question: str, present: Iterable[Id] = ()) -> TurnReport:
+    async def ask(
+        self,
+        suspect: Id,
+        question: str,
+        present: Iterable[Id] = (),
+        documents: Iterable[Id] = (),
+    ) -> TurnReport:
         shown = tuple(sorted(set(present)))
+        handed = tuple(sorted(set(documents)))
         if suspect not in {s.id for s in self.case.suspects}:
             raise ValueError(f"unknown suspect '{suspect}'")
         unknown = set(shown) - {c.id for c in self.case.clues}
         if unknown:
             raise ValueError(f"unknown clues {sorted(unknown)}")
+        missing = set(handed) - {d.id for d in self.case.documents}
+        if missing:
+            raise ValueError(f"unknown documents {sorted(missing)}")
         seat = self.seat(suspect)
         async with self._locks.setdefault(suspect, asyncio.Lock()):
             out = await self._graph.ainvoke(
-                TurnInput(question=question, present=shown), seat.config, context=seat
+                TurnInput(question=question, present=shown, documents=handed),
+                seat.config,
+                context=seat,
             )
         state = SuspectState.model_validate(out)
         return TurnReport(
@@ -140,7 +153,9 @@ async def permitted_claims(state: SuspectState, runtime: Runtime[Seat]) -> dict[
 
 
 async def generate(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, object]:
-    text = await _speak(runtime.context, suspect_messages(_view(state), state))
+    text = await _speak(
+        runtime.context, suspect_messages(_view(state), state, runtime.context.case)
+    )
     return {"attempts": (Attempt(draft=text),)}
 
 
@@ -222,7 +237,7 @@ async def rewrite(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, obje
     seat = runtime.context
     last = state.attempts[-1]
     messages = [
-        *suspect_messages(_view(state), state),
+        *suspect_messages(_view(state), state, seat.case),
         {"role": "assistant", "content": last.draft},
         {"role": "user", "content": rewrite_request(last.feedback)},
     ]
@@ -253,7 +268,9 @@ async def commit(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, objec
     claims = () if state.fell_back else state.attempts[-1].claims
     result = verify_reply(seat.case, seat.suspect, claims, state.ledger, state.shown)
     reply = FALLBACK if state.fell_back else state.attempts[-1].draft
-    exchange = Exchange(question=state.question, shown=state.present, reply=reply)
+    exchange = Exchange(
+        question=state.question, shown=state.present, reply=reply, handed=state.documents
+    )
     return {
         "ledger": result.commit(state.turn),
         "history": (*state.history, exchange),
@@ -358,12 +375,20 @@ async def _log_unverified(seat: Seat, state: SuspectState, action: Action) -> No
         )
 
 
-def suspect_messages(view: SuspectView, state: SuspectState) -> list[dict[str, Any]]:
+def suspect_messages(view: SuspectView, state: SuspectState, case: Case) -> list[dict[str, Any]]:
+    docs = {d.id: d for d in case.documents}
+
+    def line(question: str, shown: Collection[Id], handed: Collection[Id]) -> str:
+        quoted = [SUSPECT.render("document", quoted=quote_document(docs[i])) for i in handed]
+        return _player_line(view, question, shown, quoted)
+
     messages: list[dict[str, Any]] = [{"role": "system", "content": suspect_brief(view)}]
     for x in view.history:
-        messages.append({"role": "user", "content": _player_line(view, x.question, x.shown)})
+        messages.append({"role": "user", "content": line(x.question, x.shown, x.handed)})
         messages.append({"role": "assistant", "content": x.reply})
-    messages.append({"role": "user", "content": _player_line(view, state.question, state.present)})
+    messages.append(
+        {"role": "user", "content": line(state.question, state.present, state.documents)}
+    )
     return messages
 
 
@@ -415,12 +440,12 @@ def render_statement(case: PublicCase, s: Statement, me: Id) -> str:
             return f"{who} {'owe' if who == 'you' else 'owes'} {obj} money"
 
 
-def _player_line(view: SuspectView, question: str, shown: Collection[Id]) -> str:
+def _player_line(
+    view: SuspectView, question: str, shown: Collection[Id], documents: Sequence[str]
+) -> str:
     clues = [c for c in view.shown if c.id in shown]
-    if not clues:
-        return question
     evidence = " ".join(SUSPECT.render("evidence", description=c.description) for c in clues)
-    return f"{evidence}\n{question}"
+    return "\n".join([*([evidence] if evidence else []), *documents, question])
 
 
 def rewrite_request(feedback: str) -> str:

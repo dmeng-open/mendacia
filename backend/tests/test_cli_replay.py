@@ -66,3 +66,18 @@ def test_fourth_hint_is_refused_in_the_loop() -> None:
     hints = [line for line in out if line.startswith(("Hint:", "You have no hints"))]
     assert len(hints) == 4
     assert hints[-1].startswith("You have no hints left.")
+
+
+def test_replayed_gallery_game_unlocks_the_footage_before_reading_it() -> None:
+    gallery = Case.model_validate_json((ROOT / "cases" / "gallery.json").read_text())
+    script = SCRIPT.with_name("gallery_locked_docs.txt").read_text().splitlines()
+    out: list[str] = []
+    asyncio.run(play(gallery, uuid.uuid4().hex, given(*script), out.append))
+
+    first_read = out.index("> /read cctv_log")
+    assert out[first_read + 1] == "That document is locked."
+    assert not any("Camera E2" in line for line in out[: out.index("> /read security_desk_memo")])
+    after_invoice = out[out.index("> /read catering_invoice") : out.index("> /status")]
+    assert not any(line.startswith("New clue") for line in after_invoice)
+    assert any(line.startswith("New clue: cctv_east_hall:") for line in out)
+    assert "Correct." in out
