@@ -14,7 +14,7 @@ from agents.verifier import Verdict, leaks_canary
 from agents.view import PermittedClaims
 from engine.schema import Case
 from security.context import AuthContext, canary, case_version
-from security.events import CanaryInRow, TraceStep, log_decision
+from security.events import CanaryInRow, TraceStep, audit_row, log_decisions
 from security.policy import Decision
 from tests.agents.suspect_scenarios import MANOR
 
@@ -66,19 +66,19 @@ def test_draft_with_the_canary_is_blocked_and_logged_without_it(
     assert "MENDACIA-CANARY" not in everything.upper()
 
 
-def test_log_decision_refuses_a_row_holding_the_canary() -> None:
+def test_log_decisions_refuses_a_row_holding_the_canary() -> None:
     subject = AuthContext("hobbs", "suspect", "g", case_version(MANOR), 0)
+    row = audit_row(
+        subject,
+        trace_id="t",
+        turn_id=1,
+        action="verify",
+        resource_type="reply",
+        decision=Decision("deny", "blocked"),
+        trace=(TraceStep(step="verify", outcome=f"draft held {canary(MANOR)}", ms=0.0),),
+    )
     with pytest.raises(CanaryInRow):
-        log_decision(
-            subject,
-            trace_id="t",
-            turn_id=1,
-            action="verify",
-            resource_type="reply",
-            decision=Decision("deny", "blocked"),
-            latency_ms=0.0,
-            trace=(TraceStep("verify", f"draft held {canary(MANOR)}", 0.0),),
-        )
+        log_decisions([row])
 
 
 def test_a_verdict_outside_the_permitted_claims_is_blocked() -> None:

@@ -160,7 +160,7 @@ The scan reads Truth-layer access as any use of `culprit`, `crime`, or `solution
 
 ### 6.6 Audit (built, P3-2)
 
-`security_events` has these columns: `trace_id`, `game_id`, `turn_id`, `actor_type`, `action`, `resource_type`, `policy_version`, `decision`, `reason_code`, `latency_ms`, `model_version`, `prompt_version`, `case_version`, `state_version`, `replay_ref`, and `decision_trace`. `decision_trace` is a JSON list of steps (auth, identity, policy, tool, verify, commit), each with its outcome and ms. Rows never hold Truth text, a full prompt, or a player's raw message. Reproduction goes through `replay_ref`. Each suspect turn writes a `retrieve` row with policy decision counts by reason code, one `verify` row per draft, and a `commit_turn` row. `security.events.log_decision` refuses a row that contains the canary.
+`security_events` has these columns: `trace_id`, `game_id`, `turn_id`, `actor_type`, `action`, `resource_type`, `policy_version`, `decision`, `reason_code`, `latency_ms`, `model_version`, `prompt_version`, `case_version`, `state_version`, `replay_ref`, and `decision_trace`. `decision_trace` is a JSON list of steps (auth, identity, policy, tool, verify, commit), each with its outcome and ms. Rows never hold Truth text, a full prompt, or a player's raw message. Reproduction goes through `replay_ref`. Each suspect turn records a `retrieve` row with policy decision counts by reason code, one `verify` row per draft, and a `commit_turn` row, written in one transaction at commit. `security.events.log_decision` refuses a row that contains the canary.
 
 ### 6.7 Supply chain of agent instructions (P3-1)
 

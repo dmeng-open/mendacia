@@ -16,6 +16,7 @@ from agents.ledger import Ledger
 from agents.verifier import ClaimCheck, Verdict
 from agents.view import Exchange, Frozen, PermittedClaims, SuspectView
 from engine.schema import Case, Id
+from security.events import AuditRow
 
 HISTORY_WINDOW = 6
 UNCHECKED = "say it again in short, plain sentences: what you know, or that you do not know"
@@ -78,6 +79,7 @@ class SuspectState(Frozen):
     trace_id: str = ""
     view: SuspectView | None = None
     permitted: PermittedClaims | None = None
+    audit: tuple[AuditRow, ...] = ()
 
     @property
     def turn(self) -> int:

@@ -137,5 +137,8 @@ def build_view(
     )
     ms = (time.perf_counter() - started) * 1000
     outcome = " ".join(f"{k}={v}" for k, v in sorted(tally.items()))
-    trace = (TraceStep("identity", f"suspect state_version={subject.state_version}", 0.0),)
-    return view, (*trace, TraceStep("policy", outcome, round(ms, 3)))
+    identity = f"suspect state_version={subject.state_version}"
+    return view, (
+        TraceStep(step="identity", outcome=identity, ms=0.0),
+        TraceStep(step="policy", outcome=outcome, ms=round(ms, 3)),
+    )

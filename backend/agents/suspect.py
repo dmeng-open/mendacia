@@ -38,7 +38,7 @@ from app.config import Settings
 from app.llm import ModelRole, complete
 from engine.schema import Case, Id, Statement
 from security.context import AuthContext
-from security.events import TraceStep, log_decision
+from security.events import AuditRow, TraceStep, audit_row, log_decisions
 from security.policy import Decision, PolicyContext, Resource, authorize
 
 FALLBACK = "I'd rather not answer that."
@@ -125,8 +125,14 @@ async def retrieve(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, obj
         seat.case, subject, state.shown, state.ledger.of(seat.suspect), state.recent
     )
     trace_id = uuid.uuid4().hex
-    await _audit(subject, trace_id, state.turn, "retrieve", "knowledge", _ok("view_built"), trace)
-    return {"attempts": (), "fell_back": False, "trace_id": trace_id, "view": view}
+    row = _row(subject, trace_id, state.turn, "retrieve", "knowledge", _ok("view_built"), trace)
+    return {
+        "attempts": (),
+        "fell_back": False,
+        "trace_id": trace_id,
+        "view": view,
+        "audit": (row,),
+    }
 
 
 async def permitted_claims(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, object]:
@@ -173,16 +179,10 @@ async def verify(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, objec
     decision = _ok(reason) if attempt.verified else Decision("deny", reason)
     ms = (time.perf_counter() - started) * 1000
     outcome = f"claims={len(checks)} blocked={len(attempt.blocked)} attempt={len(state.attempts)}"
-    await _audit(
-        _subject(seat, state),
-        state.trace_id,
-        state.turn,
-        "verify",
-        "reply",
-        decision,
-        (TraceStep("verify", outcome, round(ms, 3)),),
-    )
-    return {"attempts": (*state.attempts[:-1], attempt)}
+    trace = (TraceStep(step="verify", outcome=outcome, ms=round(ms, 3)),)
+    subject = _subject(seat, state)
+    row = _row(subject, state.trace_id, state.turn, "verify", "reply", decision, trace)
+    return {"attempts": (*state.attempts[:-1], attempt), "audit": (*state.audit, row)}
 
 
 def bound(check: Check, permitted: PermittedClaims) -> Check:
@@ -245,8 +245,9 @@ async def commit(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, objec
     turn = Resource("turn", str(state.turn), view.case_version, "conversation")
     decision = authorize(master, "commit_turn", turn, PolicyContext(len(state.history)))
     outcome = "fallback" if state.fell_back else "released"
-    trace = (TraceStep("commit", outcome, 0.0),)
-    await _audit(master, state.trace_id, state.turn, "commit_turn", "turn", decision, trace)
+    trace = (TraceStep(step="commit", outcome=outcome, ms=0.0),)
+    row = _row(master, state.trace_id, state.turn, "commit_turn", "turn", decision, trace)
+    await asyncio.to_thread(log_decisions, (*state.audit, row))
     if not decision.allowed:
         raise StaleState(decision.reason_code)
     claims = () if state.fell_back else state.attempts[-1].claims
@@ -257,6 +258,7 @@ async def commit(state: SuspectState, runtime: Runtime[Seat]) -> dict[str, objec
         "ledger": result.commit(state.turn),
         "history": (*state.history, exchange),
         "presented": state.shown,
+        "audit": (),
     }
 
 
@@ -313,7 +315,7 @@ def _ok(reason: str) -> Decision:
     return Decision("allow", reason)
 
 
-async def _audit(
+def _row(
     subject: AuthContext,
     trace_id: str,
     turn: int,
@@ -321,16 +323,14 @@ async def _audit(
     resource_type: str,
     decision: Decision,
     trace: tuple[TraceStep, ...],
-) -> None:
-    await asyncio.to_thread(
-        log_decision,
+) -> AuditRow:
+    return audit_row(
         subject,
         trace_id=trace_id,
         turn_id=turn,
         action=action,
         resource_type=resource_type,
         decision=decision,
-        latency_ms=sum(step.ms for step in trace),
         trace=trace,
         prompt_version=SUSPECT.version,
     )
