@@ -183,3 +183,12 @@ def test_duplicate_chain_entry_fails() -> None:
         ValidationError, match="duplicate solution_chain id 'pike_kitchen_testimony'"
     ):
         Case.model_validate(data)
+
+
+def test_a_document_cannot_share_an_id_with_a_clue() -> None:
+    data = json.loads((CASES / "manor.json").read_text())
+    data["documents"][4]["id"] = "pike_kitchen_testimony"
+    with pytest.raises(
+        ValidationError, match=r"documents\[4\]\.id: 'pike_kitchen_testimony' is also a clue id"
+    ):
+        Case.model_validate(data)

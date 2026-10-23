@@ -209,6 +209,8 @@ def _reference_problems(case: Case) -> list[str]:
             check(f"clues[{i}].doc_id", clue.doc_id, documents, "document")
 
     for i, doc in enumerate(case.documents):
+        if doc.id in clues:
+            problems.append(f"documents[{i}].id: '{doc.id}' is also a clue id")
         if isinstance(doc.visibility, Unlock):
             for j, ref in enumerate(doc.visibility.unlocked_by):
                 path = f"documents[{i}].visibility.unlocked_by[{j}]"
