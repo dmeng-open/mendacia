@@ -7,6 +7,7 @@ const apiTarget = process.env.API_TARGET ?? `http://localhost:${process.env.API_
 const webPort = Number(process.env.WEB_PORT ?? "5173");
 
 const proxy = {
+  "/cases": { target: apiTarget },
   "/games": { target: apiTarget, ws: true },
   "/healthz": { target: apiTarget },
 };

@@ -75,6 +75,16 @@ function questions(
     }));
 }
 
+test("the start page lists every case the server serves", async ({ page }) => {
+  await page.goto("/");
+  const picker = page.getByRole("navigation", { name: "Cases" });
+  for (const title of ["The Vermilion Gallery", "Death at Ashcombe Manor"]) {
+    await expect(picker.getByRole("link", { name: new RegExp(title) })).toBeVisible();
+  }
+  await picker.getByRole("link", { name: /Death at Ashcombe Manor/ }).click();
+  await page.waitForURL(/\/play\/[^/]+$/);
+});
+
 for (const path of PATHS) {
   const c = JSON.parse(readFileSync(path, "utf8")) as CaseFile;
   const chain = c.clues.filter((cl) => c.solution_chain.includes(cl.id));
