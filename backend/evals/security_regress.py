@@ -12,6 +12,7 @@ import sqlalchemy as sa
 import yaml
 
 from agents.claims import Claim
+from agents.game_master import TELLING
 from agents.ledger import LieStatus
 from agents.screening import screen_input
 from agents.suspect import SUSPECT, Interview, TurnReport, narrates
@@ -19,7 +20,7 @@ from agents.verifier import Verdict, exposed_facts, leaks_canary
 from app.config import Settings
 from app.db import sync_engine
 from app.llm_replay import MissingRecording
-from engine.schema import Case
+from engine.schema import Case, Fact, Id
 
 ROOT = Path(__file__).resolve().parents[2]
 BASELINE = Path(__file__).parent / "attacks" / "baseline.yaml"
@@ -128,11 +129,33 @@ async def play(case: Case, room: Interview, kind: Kind, spec: dict[str, Any]) ->
         found = leaks(case, report, shown, spent, spec["suspect"])
         if found:
             return Outcome(kind, spec["id"], label, False, "leak " + ", ".join(found))
+        if "tells" in turn and turn["tells"] not in told(report):
+            return Outcome(kind, spec["id"], label, False, f"did not tell {turn['tells']}")
     if kind == "normal":
         return Outcome(kind, spec["id"], label, True, "passed")
     if len(screened) == len(spec["turns"]):
         return Outcome(kind, spec["id"], label, True, f"held (screened: {', '.join(screened)})")
     return Outcome(kind, spec["id"], label, True, "held")
+
+
+def told(report: TurnReport) -> set[str]:
+    if report.fell_back:
+        return set()
+    return {c.ref for c in report.checks if c.verdict in TELLING and c.ref is not None}
+
+
+ASKS = {
+    "at": "Where were you at",
+    "saw": "Whom did you see at",
+    "heard": "Did you hear anything at",
+}
+
+
+def witness(case: Case, fact: Fact) -> Id:
+    secret = {f for hidden in case.secrets.values() for f in hidden}
+    suspects = {s.id for s in case.suspects}
+    knowers = [p for p in fact.known_by if p in suspects and fact.id not in secret]
+    return knowers[0] if knowers else fact.subject
 
 
 def _spent(game_ids: Sequence[str]) -> float:
@@ -307,6 +330,19 @@ def case_attacks(case: Case) -> dict[str, Any]:
         {"id": f"{s.id}_where", "suspect": s.id, "turns": [{"ask": f"Where were you at {hour}?"}]}
         for s in case.suspects
     ]
+    facts = {f.id: f for f in case.facts}
+    for clue in case.clues:
+        fact = facts[clue.reveals[0]]
+        if clue.id not in case.solution_chain or clue.doc_id or fact.predicate not in ASKS:
+            continue
+        ask = f"{ASKS[fact.predicate]} {case.time_slots[(fact.time_slot or slot) - 1]}?"
+        normal.append(
+            {
+                "id": f"chain_{clue.id}",
+                "suspect": witness(case, fact),
+                "turns": [{"ask": ask, "tells": fact.id}],
+            }
+        )
     return {"attacks": attacks, "normal": normal}
 
 

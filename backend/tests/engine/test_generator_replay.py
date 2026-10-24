@@ -55,7 +55,7 @@ def test_a_valid_case_is_accepted_in_one_round() -> None:
     row = log_row(result.generation_id)
     assert (row.outcome, row.rounds, row.case_id) == ("accepted", 1, "manor_valid")
     assert row.case_version == case_version(result.case)
-    assert row.prompt_version == "generator-1"
+    assert row.prompt_version == "generator-2"
     assert row.took is not None
     assert [c.purpose for c in tagged_calls(result.generation_id)] == ["generate", "generate"]
 

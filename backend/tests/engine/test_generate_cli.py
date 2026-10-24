@@ -75,3 +75,15 @@ def test_a_taken_case_id_gets_a_suffix(fresh_catalog: None) -> None:
     assert unique(manor("manor"), catalog).id == "manor_2"
     assert unique(manor("manor_batch_one"), catalog).id == "manor_batch_one_2"
     assert unique(manor("manor_batch_new"), catalog).id == "manor_batch_new"
+
+
+def test_the_gate_asks_each_chain_witness_to_tell_their_fact() -> None:
+    from evals.security_regress import case_attacks
+    from tests.engine.generator_scenarios import manor
+
+    chain = [n for n in case_attacks(manor())["normal"] if n["id"].startswith("chain_")]
+
+    assert [(n["suspect"], n["turns"]) for n in chain] == [
+        ("mrs_pike", [{"ask": "Where were you at 10pm?", "tells": "pike_in_kitchen"}]),
+        ("mrs_pike", [{"ask": "Whom did you see at 10pm?", "tells": "pike_saw_hobbs"}]),
+    ]

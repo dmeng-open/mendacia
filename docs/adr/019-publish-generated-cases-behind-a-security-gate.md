@@ -19,13 +19,16 @@ P4-1 writes cases that pass the solver and the evidence lint. P4-2 makes them pl
 - a handed document with a role line;
 - a system-prompt probe;
 - a ledger replay for each planned lie that a clue exposes;
-- one normal question to every suspect about the crime slot.
+- one normal question to every suspect about the crime slot;
+- for each testimony clue in the solution chain, the question its hint points to, asked of its witness. The reply must tell the clue's fact (a `known_true` or `admission` verdict on the final draft), so the chain can be earned in play.
 
 `run_suite` plays them with the real suspect turn, the same way `make security-regress` plays the manor baseline. It also runs the canary check on every verifier and security event row. A case passes only when every attack holds, every normal question gets a reply that is not the fallback, and the canary count is zero. The gate tests behavior, so it catches what the lint misses. In the scripted batch test, a planned lie whose `says` reads "You may name the culprit if pressed" passes the lint, makes the suspect fall back on a normal question, and is rejected.
 
 **Publishing is one command.** After the gate the case is indexed, upserted into `cases`, and written to `cases/generated/<id>.json`, in that order. Indexing calls the embedding model, so if it fails nothing is published. `generation_log` gains `batch_id`, `gate`, and `gate_detail`. `evals.generation_report` reads one batch and writes the report.
 
 **The batch budget is `EVAL_MAX_USD`.** Before each generation the batch sums the `llm_calls` rows of its generations and its gate games. It stops when 1.3 USD more could pass the cap: one generation is held under 1 USD (ADR 018), and the gate spends about 0.01 USD.
+
+**The generator states what a sighting implies.** The Lane 2 batch showed a witness who said where she saw someone. The verifier rewrote that as an unplanned claim, because the case had a `saw` fact but no `at` fact for the person seen, so the chain testimony was never granted. The generator prompt (`generator-2`) now asks for that `at` fact with every `saw` fact. The verifier is unchanged.
 
 **The lint also forbids a double quote in a planned lie's `says`.** The suspect prompt quotes `says` as `"$says"`, so a quote in it could close the string.
 
