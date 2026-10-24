@@ -209,5 +209,13 @@ def lint_case(case: Case) -> Lint:
     findings = [*_id_findings(case), *(_structural(p) for p in problems)]
     for where, text in prose(case):
         findings += _text_findings(where, text)
+    findings += [
+        Finding(
+            f"quote_in_says: planned lie '{lie.id}' says contains a double quote",
+            f"quote_in_says: planned lie '{lie.id}' says contains a double quote",
+        )
+        for lie in case.planned_lies
+        if any(q in lie.says for q in '"\u201c\u201d')
+    ]
     key = sum(d.is_key for d in case.documents)
     return Lint(case.id, len(case.documents), key, len(locked), tuple(findings))

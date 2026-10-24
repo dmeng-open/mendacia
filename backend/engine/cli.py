@@ -1,11 +1,27 @@
 import argparse
+import asyncio
+import random
 import sys
 from pathlib import Path
+from uuid import uuid4
 
 from pydantic import ValidationError
 
+from app.catalog import Catalog, load_cases, publish
+from app.config import Settings
+from app.db import sync_engine
 from engine.evidence import lint_case
-from engine.schema import Case, DanglingReferences
+from engine.generator import (
+    OUT,
+    THEMES,
+    Accepted,
+    Brief,
+    Discarded,
+    generate_with_repair,
+    record_gate,
+    write_case,
+)
+from engine.schema import Case, DanglingReferences, Id
 from engine.solver import (
     Ambiguous,
     CheckReport,
@@ -21,6 +37,11 @@ from engine.solver import (
     WrongCulprit,
     check_case,
 )
+from evals.generation_report import batch_spend, build, gate_prefix, write
+from evals.security_regress import OverBudget, case_attacks, run_suite
+from evidence.index import index_case
+
+RESERVE_USD = 1.3
 
 
 def load_case(path: Path) -> Case:
@@ -152,6 +173,58 @@ def check(path: Path) -> int:
     return 0 if report.passed else 1
 
 
+def unique(case: Case, taken: Catalog) -> Case:
+    if case.id not in taken:
+        return case
+    n = 2
+    while f"{case.id}_{n}" in taken:
+        n += 1
+    return case.model_copy(update={"id": Id(f"{case.id}_{n}")})
+
+
+def generate(n: int, out: Path = OUT, first_theme: int | None = None) -> int:
+    settings = Settings()
+    cap = settings.eval_max_usd
+    engine = sync_engine(settings.database_url)
+    catalog = Catalog(load_cases(), engine)
+    batch_id = uuid4().hex[:12]
+    start = random.randrange(len(THEMES)) if first_theme is None else first_theme
+    print(f"batch {batch_id}: {n} cases, cap ${cap:.2f}")
+    for i in range(n):
+        spent = batch_spend(batch_id)
+        if spent + RESERVE_USD > cap:
+            print(f"stopped before case {i + 1}: ${spent:.4f} spent, one more could pass the cap")
+            break
+        brief = Brief(THEMES[(start + i) % len(THEMES)])
+        result = generate_with_repair(brief, batch_id=batch_id)
+        match result:
+            case Discarded(generation_id, reason, rounds):
+                print(f"case {i + 1}: discarded ({reason}) after {len(rounds)} rounds")
+            case Accepted(generation_id, accepted, rounds):
+                case = unique(accepted, catalog)
+                prefix = f"{gate_prefix(batch_id)}{generation_id[:8]}"
+                left = cap - batch_spend(batch_id)
+                try:
+                    suite = asyncio.run(run_suite(case, case_attacks(case), left, prefix))
+                except OverBudget as stop:
+                    print(f"case {i + 1}: {case.id} gate {stop}; stopping the batch")
+                    break
+                if not suite.passed:
+                    record_gate(generation_id, "security_rejected", ",".join(suite.failed), case)
+                    print(f"case {i + 1}: {case.id} security-rejected ({', '.join(suite.failed)})")
+                    continue
+                index_case(case, engine, run_id=generation_id)
+                with engine.begin() as conn:
+                    publish(conn, case, generation_id)
+                path = write_case(case, out)
+                record_gate(generation_id, "passed", None, case)
+                print(f"case {i + 1}: {case.id} accepted after {len(rounds)} rounds, wrote {path}")
+    report = build(batch_id)
+    print(f"wrote {write(report)}, batch cost ${report.cost_usd:.4f}")
+    print(report.summary)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="engine.cli")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -161,7 +234,12 @@ def main(argv: list[str] | None = None) -> int:
     check_cmd.add_argument("path", type=Path)
     lint_cmd = commands.add_parser("lint-evidence", help="lint each case's evidence archive")
     lint_cmd.add_argument("paths", nargs="+", type=Path)
+    generate_cmd = commands.add_parser("generate", help="generate, gate, and publish new cases")
+    generate_cmd.add_argument("--n", type=int, default=1)
+    generate_cmd.add_argument("--out", type=Path, default=OUT)
     args = parser.parse_args(argv)
+    if args.command == "generate":
+        return generate(args.n, args.out)
     if args.command == "check":
         return check(args.path)
     if args.command == "lint-evidence":

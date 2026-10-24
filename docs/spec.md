@@ -95,6 +95,8 @@ These hold in every mode and every PR.
 
 `engine.generator.generate_with_repair(brief, max_rounds=5)` has `MODEL_STRONG` write a case and returns `Accepted` or `Discarded`. Each round runs the schema, the evidence lint, and `check_case`. The first call writes the case without documents (`engine.draft.CaseDraft`), and the solver runs on it before a second call writes the 15 to 20 documents. A failed solver check becomes a repair round, with instructions from `engine.repair.repair_instructions` that name the alternative culprit and the facts that allow it. The loop stops at 5 rounds, or before any model call once the generation has spent 0.70 USD or most of its 280 s. Generated text is untrusted. It enters a later prompt only as JSON data inside `<data>`, after it passed the text lint, and feedback to the model carries ids and rule names only. The evidence lint scans every prose field of a case. Each generation writes one `generation_log` row (rounds, outcome, failure reason, cost, models, `prompt_version`, and the accepted `case_version`), and its `llm_calls` rows carry the generation id in `run_id`. `uv run python -m engine.generator --once` runs one generation and writes an accepted case to `cases/generated/`.
 
+`make cases N=<N>` (`python -m engine.cli generate --n <N>`, P4-2, ADR 019) runs N generations as one batch capped by `EVAL_MAX_USD`. Each accepted case then passes a security gate: the baseline attack classes from `evals/security_regress.py`, aimed at that case's own suspects, scene, and lies (`case_attacks`), plus a normal question for every suspect, a question to each chain witness whose reply must tell the clue's fact, and the canary check. A case that passes is indexed, written to the `cases` table, and written to `cases/generated/<id>.json` in one command, and `GET /cases` lists it at once. `generation_log` records each generation's batch and gate. `reports/generation.md` and `reports/generation.json` give the first-pass rate, the final pass rate, and the security-gate rejections.
+
 ## 5. Suspect turn contract
 
 The turn has nine steps (v2.1 §6.2). Steps marked built exist in `agents/suspect.py` and ADR 005. The rest land in the named PR.
@@ -199,6 +201,7 @@ The browser, the CLI, and the detective bot use the same `app/games.py` service.
 | Method and path | Purpose |
 |---|---|
 | `POST /games` | Create a game for a case and issue a signed anonymous session bound to it |
+| `GET /cases` | Every playable case: the hand-written ones in `cases/`, then each published generated case. Titles and summaries only (P4-2, ADR 019) |
 | `GET /games/{id}` | Public projection: case summary, suspects, visible documents, questions and hints left, discovered clues, `state_version` |
 | `WS /games/{id}/ask` | Ask a suspect; streams `thinking`, `validating`, `chunk`…, then `done` with `questions_left` |
 | `GET /games/{id}/search?q=` | Authorized hybrid search over visible documents |

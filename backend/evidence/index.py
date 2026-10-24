@@ -46,10 +46,6 @@ class IndexReport:
     embedded_documents: int
 
 
-def default_embed_batch(texts: list[str]) -> list[list[float]]:
-    return llm.embed(texts, purpose="index_case").vectors
-
-
 def embed_text(chunk: Chunk) -> str:
     return f"{chunk.title}\n\n{chunk.text}"
 
@@ -65,8 +61,13 @@ def vector_literal(vector: Sequence[float]) -> str:
 
 
 def index_case(
-    case: Case, engine: sa.Engine | None = None, embed: BatchEmbed = default_embed_batch
+    case: Case,
+    engine: sa.Engine | None = None,
+    embed: BatchEmbed | None = None,
+    *,
+    run_id: str | None = None,
 ) -> IndexReport:
+    embed = embed or (lambda texts: llm.embed(texts, purpose="index_case", run_id=run_id).vectors)
     settings = Settings()
     engine = engine or sync_engine(settings.database_url)
     cv = case_version(case)

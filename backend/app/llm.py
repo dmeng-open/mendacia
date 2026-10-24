@@ -188,7 +188,7 @@ def complete(
     )
 
 
-def embed(texts: list[str], *, purpose: str) -> Embedding:
+def embed(texts: list[str], *, purpose: str, run_id: str | None = None) -> Embedding:
     request = {"input": texts}
 
     def live_call(model: str, kwargs: dict[str, Any]) -> tuple[Any, float]:
@@ -200,7 +200,9 @@ def embed(texts: list[str], *, purpose: str) -> Embedding:
     def to_output(response: Any) -> list[list[float]]:
         return [list(item["embedding"]) for item in response.data]
 
-    recording = _run(Settings(), ModelRole.EMBED, request, purpose, None, live_call, to_output)
+    recording = _run(
+        Settings(), ModelRole.EMBED, request, purpose, None, live_call, to_output, run_id=run_id
+    )
     assert not isinstance(recording.output, str)
     return Embedding(
         vectors=recording.output,
