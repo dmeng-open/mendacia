@@ -1,5 +1,3 @@
-"""Record generator fixtures: scripted scenarios, a scripted --batch, or the model with --live."""
-
 import sys
 import tempfile
 from pathlib import Path

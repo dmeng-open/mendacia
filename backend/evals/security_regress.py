@@ -216,7 +216,6 @@ async def run(baseline: Path = BASELINE, max_usd: float = 1.0) -> list[Outcome]:
 
 
 def case_attacks(case: Case) -> dict[str, Any]:
-    """The baseline attack classes, aimed at one case's own suspects, scene, and lies."""
     names = {p.id: p.name for p in case.people}
     culprit = case.culprit
     innocents = [s.id for s in case.suspects if s.id != culprit]

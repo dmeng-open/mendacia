@@ -33,7 +33,6 @@ const PATHS = process.env.CASE
   ? [isAbsolute(process.env.CASE) ? process.env.CASE : resolve(ROOT, process.env.CASE)]
   : ["gallery", "lighthouse", "manor"].map((n) => resolve(ROOT, "cases", `${n}.json`));
 
-/** Documents to open, unlockers first, so every chain document becomes visible. */
 function documentsToOpen(c: CaseFile): string[] {
   const docs = new Map(c.documents.map((d) => [d.id, d]));
   const seen = new Set<string>();
@@ -60,7 +59,6 @@ const ASKS: Record<string, string> = {
   heard: "Did you hear anything at",
 };
 
-/** The question that asks a testimony clue's witness for its fact, by predicate. */
 function questions(
   c: CaseFile,
   clues: CaseFile["clues"],
