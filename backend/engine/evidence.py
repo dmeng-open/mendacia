@@ -23,12 +23,27 @@ MODEL_MARKER = re.compile(
 
 
 @dataclass(frozen=True)
+class Finding:
+    message: str
+    hint: str
+    text: bool = True
+
+
+@dataclass(frozen=True)
 class Lint:
     case_id: Id
     docs: int
     key: int
     locked: int
-    problems: tuple[str, ...]
+    findings: tuple[Finding, ...]
+
+    @property
+    def problems(self) -> tuple[str, ...]:
+        return tuple(f.message for f in self.findings)
+
+
+def _structural(message: str) -> Finding:
+    return Finding(message, message, text=False)
 
 
 def _unlockers(doc: EvidenceDoc) -> frozenset[Id]:
@@ -65,30 +80,65 @@ def _scanner() -> ModuleType:
     return module
 
 
-def _text_problems(doc: EvidenceDoc) -> list[str]:
+def prose(case: Case) -> list[tuple[str, str]]:
+    return [
+        ("case title", case.title),
+        ("case summary", case.summary),
+        *(
+            (f"person '{p.id}' {part}", text)
+            for p in case.people
+            for part, text in (("name", p.name), ("description", p.description))
+        ),
+        *((f"location '{k}'", v) for k, v in case.locations.items()),
+        *((f"item '{k}'", v) for k, v in case.items.items()),
+        *((f"time slot {n}", label) for n, label in enumerate(case.time_slots, start=1)),
+        *((f"planned lie '{lie.id}' says", lie.says) for lie in case.planned_lies),
+        *((f"clue '{c.id}' description", c.description) for c in case.clues),
+        *(
+            (f"document '{d.id}' {part}", text)
+            for d in case.documents
+            for part, text in (("title", d.title), ("body", d.body))
+        ),
+    ]
+
+
+def _text_findings(where: str, text: str) -> list[Finding]:
     scanner = _scanner()
     hosts = scanner.allowed_hosts()
-    problems: list[str] = []
-    for part, text in (("title", doc.title), ("body", doc.body)):
-        where = f"document '{doc.id}' {part}"
-        problems += [
-            f"{f.rule}: {where} line {f.line}: {f.detail}"
-            for f in scanner.scan_text(where, text, hosts)
-        ]
-        hidden = sorted({f"U+{ord(ch):04X}" for ch in text if invisible(ch)})
-        if hidden:
-            problems.append(f"invisible_unicode: {where}: {', '.join(hidden)}")
-        if (whole := screen_input(text)).rule is not None:
-            problems.append(f"model_instruction: {where}: {whole.rule.value} '{whole.matched}'")
-        for number, line in enumerate(plain(text).splitlines(), start=1):
-            if ROLE_MARKER.match(line) or MODEL_MARKER.search(line):
-                problems.append(f"model_instruction: {where} line {number}: role or chat marker")
-            elif (screened := screen_input(line)).rule is not None:
-                problems.append(
-                    f"model_instruction: {where} line {number}: {screened.rule.value} "
-                    f"'{screened.matched}'"
+    found = [
+        Finding(f"{f.rule}: {where} line {f.line}: {f.detail}", f"{f.rule} in {where}")
+        for f in scanner.scan_text(where, text, hosts)
+    ]
+    hidden = sorted({f"U+{ord(ch):04X}" for ch in text if invisible(ch)})
+    if hidden:
+        found.append(
+            Finding(
+                f"invisible_unicode: {where}: {', '.join(hidden)}", f"invisible_unicode in {where}"
+            )
+        )
+    instruction = f"model_instruction in {where}"
+    if (whole := screen_input(text)).rule is not None:
+        found.append(
+            Finding(
+                f"model_instruction: {where}: {whole.rule.value} '{whole.matched}'", instruction
+            )
+        )
+    for number, line in enumerate(plain(text).splitlines(), start=1):
+        if ROLE_MARKER.match(line) or MODEL_MARKER.search(line):
+            found.append(
+                Finding(
+                    f"model_instruction: {where} line {number}: role or chat marker", instruction
                 )
-    return problems
+            )
+        elif (screened := screen_input(line)).rule is not None:
+            found.append(
+                Finding(
+                    f"model_instruction: {where} line {number}: {screened.rule.value} "
+                    f"'{screened.matched}'",
+                    instruction,
+                )
+            )
+    return found
 
 
 def lint_case(case: Case) -> Lint:
@@ -115,7 +165,8 @@ def lint_case(case: Case) -> Lint:
         for d in locked
         if d.id not in reachable
     ]
-    for d in case.documents:
-        problems += _text_problems(d)
+    findings = [_structural(p) for p in problems]
+    for where, text in prose(case):
+        findings += _text_findings(where, text)
     key = sum(d.is_key for d in case.documents)
-    return Lint(case.id, len(case.documents), key, len(locked), tuple(problems))
+    return Lint(case.id, len(case.documents), key, len(locked), tuple(findings))
