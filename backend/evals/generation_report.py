@@ -51,12 +51,13 @@ def batch_spend(batch_id: str) -> float:
     with sync_engine(Settings().database_url).connect() as conn:
         total = conn.scalar(
             sa.select(sa.func.coalesce(sa.func.sum(LLM_CALLS.c.cost_usd), 0.0)).where(
+                LLM_CALLS.c.mode != "replay",
                 sa.or_(
                     LLM_CALLS.c.run_id.in_(
                         sa.select(GENERATION_LOG.c.id).where(GENERATION_LOG.c.batch_id == batch_id)
                     ),
                     LLM_CALLS.c.game_id.startswith(gate_prefix(batch_id)),
-                )
+                ),
             )
         )
     return float(total or 0.0)

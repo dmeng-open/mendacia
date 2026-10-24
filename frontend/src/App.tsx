@@ -24,7 +24,7 @@ type Panel = (typeof PANELS)[number];
 /** A loader, not an effect, creates the game, so StrictMode cannot create two. */
 async function startGame({ request }: LoaderFunctionArgs) {
   const requested = new URL(request.url).searchParams.get("case");
-  if (requested === null) return null;
+  if (!requested) return null;
   const view = await api.createGame(requested as CaseId);
   queryClient.setQueryData(gameQuery(view.gameId).queryKey, view);
   return redirect(`/play/${view.gameId}`);

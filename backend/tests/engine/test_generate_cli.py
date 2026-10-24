@@ -34,7 +34,7 @@ def test_a_replayed_batch_publishes_only_the_case_that_passes_every_gate(
     monkeypatch.setattr("engine.cli.THEMES", tuple(c.theme for c in batch()))
     monkeypatch.setattr("evals.generation_report.REPORTS", tmp_path / "reports")
 
-    assert generate(3, tmp_path / "generated") == 0
+    assert generate(3, tmp_path / "generated", first_theme=0) == 0
 
     out = capsys.readouterr().out
     assert out.splitlines()[-1] == "first-pass 1/3, final 1/3, security-rejected 1"

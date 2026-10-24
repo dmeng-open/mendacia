@@ -29,16 +29,28 @@ def load_cases(directory: Path = CASES_DIR) -> dict[Id, Case]:
     return {c.id: c for c in found}
 
 
+class IdTaken(ValueError):
+    pass
+
+
 def publish(conn: sa.Connection, case: Case, generation_id: str | None = None) -> None:
-    values = {
-        "case_version": case_version(case),
-        "title": case.title,
-        "summary": case.summary,
-        "body": case.model_dump(mode="json"),
-        "generation_id": generation_id,
-    }
-    stmt = insert(CASES).values(id=case.id, **values)
-    conn.execute(stmt.on_conflict_do_update(index_elements=["id"], set_=values))
+    """Publish once: the same version again is a no-op, and another case under the id fails."""
+    version = case_version(case)
+    conn.execute(
+        insert(CASES)
+        .values(
+            id=case.id,
+            case_version=version,
+            title=case.title,
+            summary=case.summary,
+            body=case.model_dump(mode="json"),
+            generation_id=generation_id,
+        )
+        .on_conflict_do_nothing(index_elements=["id"])
+    )
+    stored = conn.scalar(sa.select(CASES.c.case_version).where(CASES.c.id == case.id))
+    if stored != version:
+        raise IdTaken(f"case id {case.id!r} is already published with another version")
 
 
 class Catalog(Mapping[Id, Case]):

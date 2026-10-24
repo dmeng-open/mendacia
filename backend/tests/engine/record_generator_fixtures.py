@@ -81,7 +81,7 @@ def _batch() -> None:
         patch("engine.cli.THEMES", tuple(c.theme for c in cases)),
         tempfile.TemporaryDirectory() as out,
     ):
-        generate(len(cases), Path(out))
+        generate(len(cases), Path(out), first_theme=0)
 
 
 def main(argv: list[str]) -> int:

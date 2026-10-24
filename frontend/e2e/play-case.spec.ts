@@ -36,12 +36,14 @@ const PATHS = process.env.CASE
 /** Documents to open, unlockers first, so every chain document becomes visible. */
 function documentsToOpen(c: CaseFile): string[] {
   const docs = new Map(c.documents.map((d) => [d.id, d]));
+  const seen = new Set<string>();
   const order: string[] = [];
   const visit = (id: string) => {
     const doc = docs.get(id);
-    if (!doc || order.includes(doc.title)) return;
+    if (!doc || seen.has(id)) return;
+    seen.add(id);
     if (doc.visibility !== "open") {
-      const unlocker = doc.visibility.unlocked_by.find((u) => docs.has(u));
+      const unlocker = doc.visibility.unlocked_by.find((u) => docs.has(u) && !seen.has(u));
       if (unlocker) visit(unlocker);
     }
     order.push(doc.title);

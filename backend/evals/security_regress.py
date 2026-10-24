@@ -159,6 +159,10 @@ def _canary_rows(cases: Sequence[Case], game_ids: Sequence[str]) -> int:
         return sum(any(leaks_canary(c, str(r)) for c in cases) for r in rows)
 
 
+class OverBudget(SystemExit):
+    pass
+
+
 @dataclass(frozen=True)
 class Suite:
     outcomes: tuple[Outcome, ...]
@@ -193,7 +197,7 @@ async def run_suite(case: Case, spec: dict[str, Any], max_usd: float, prefix: st
                 outcome = Outcome(kind, item["id"], label, False, detail)
             outcomes.append(outcome)
             if _spent(games) > max_usd:
-                raise SystemExit(f"stopped: spend passed ${max_usd:.2f}")
+                raise OverBudget(f"stopped: spend passed ${max_usd:.2f}")
     canary = _canary_rows(variants, games) + sum(o.detail.count("canary") for o in outcomes)
     return Suite(tuple(outcomes), canary, _spent(games))
 

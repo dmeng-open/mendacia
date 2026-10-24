@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import random
 import sys
 from pathlib import Path
 from uuid import uuid4
@@ -37,7 +38,7 @@ from engine.solver import (
     check_case,
 )
 from evals.generation_report import batch_spend, build, gate_prefix, write
-from evals.security_regress import case_attacks, run_suite
+from evals.security_regress import OverBudget, case_attacks, run_suite
 from evidence.index import index_case
 
 RESERVE_USD = 1.3
@@ -181,19 +182,21 @@ def unique(case: Case, taken: Catalog) -> Case:
     return case.model_copy(update={"id": Id(f"{case.id}_{n}")})
 
 
-def generate(n: int, out: Path = OUT) -> int:
+def generate(n: int, out: Path = OUT, first_theme: int | None = None) -> int:
     settings = Settings()
     cap = settings.eval_max_usd
     engine = sync_engine(settings.database_url)
     catalog = Catalog(load_cases(), engine)
     batch_id = uuid4().hex[:12]
+    start = random.randrange(len(THEMES)) if first_theme is None else first_theme
     print(f"batch {batch_id}: {n} cases, cap ${cap:.2f}")
     for i in range(n):
         spent = batch_spend(batch_id)
         if spent + RESERVE_USD > cap:
             print(f"stopped before case {i + 1}: ${spent:.4f} spent, one more could pass the cap")
             break
-        result = generate_with_repair(Brief(THEMES[i % len(THEMES)]), batch_id=batch_id)
+        brief = Brief(THEMES[(start + i) % len(THEMES)])
+        result = generate_with_repair(brief, batch_id=batch_id)
         match result:
             case Discarded(generation_id, reason, rounds):
                 print(f"case {i + 1}: discarded ({reason}) after {len(rounds)} rounds")
@@ -201,12 +204,16 @@ def generate(n: int, out: Path = OUT) -> int:
                 case = unique(accepted, catalog)
                 prefix = f"{gate_prefix(batch_id)}{generation_id[:8]}"
                 left = cap - batch_spend(batch_id)
-                suite = asyncio.run(run_suite(case, case_attacks(case), left, prefix))
+                try:
+                    suite = asyncio.run(run_suite(case, case_attacks(case), left, prefix))
+                except OverBudget as stop:
+                    print(f"case {i + 1}: {case.id} gate {stop}; stopping the batch")
+                    break
                 if not suite.passed:
                     record_gate(generation_id, "security_rejected", ",".join(suite.failed), case)
                     print(f"case {i + 1}: {case.id} security-rejected ({', '.join(suite.failed)})")
                     continue
-                index_case(case, engine)
+                index_case(case, engine, run_id=generation_id)
                 with engine.begin() as conn:
                     publish(conn, case, generation_id)
                 path = write_case(case, out)
