@@ -91,6 +91,10 @@ These hold in every mode and every PR.
 
 `make check-case CASE=<path>` prints one line per check. No case reaches players unless every check passes. The suspect turn never reaches the solver or the full Truth.
 
+### 4.1 Case generation (built, P4-1, ADR 018)
+
+`engine.generator.generate_with_repair(brief, max_rounds=5)` has `MODEL_STRONG` write a case and returns `Accepted` or `Discarded`. Each round runs the schema, the evidence lint, and `check_case`. The first call writes the case without documents (`engine.draft.CaseDraft`), and the solver runs on it before a second call writes the 15 to 20 documents. A failed solver check becomes a repair round, with instructions from `engine.repair.repair_instructions` that name the alternative culprit and the facts that allow it. The loop stops at 5 rounds, or before any model call once the generation has spent 0.70 USD or most of its 280 s. Generated text is untrusted. It enters a later prompt only as JSON data inside `<data>`, after it passed the text lint, and feedback to the model carries ids and rule names only. The evidence lint scans every prose field of a case. Each generation writes one `generation_log` row (rounds, outcome, failure reason, cost, models, `prompt_version`, and the accepted `case_version`), and its `llm_calls` rows carry the generation id in `run_id`. `uv run python -m engine.generator --once` runs one generation and writes an accepted case to `cases/generated/`.
+
 ## 5. Suspect turn contract
 
 The turn has nine steps (v2.1 §6.2). Steps marked built exist in `agents/suspect.py` and ADR 005. The rest land in the named PR.
