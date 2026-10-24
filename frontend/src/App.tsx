@@ -7,11 +7,11 @@ import {
   useRouteError,
   type LoaderFunctionArgs,
 } from "react-router";
-import { api, GameProblem, type GameId, type SuspectId } from "@/api";
-import { CASE_IDS, isCaseId } from "@/game/cases";
+import { api, GameProblem, type CaseId, type GameId, type SuspectId } from "@/api";
 import { gameQuery, queryClient, useGame } from "@/game/hooks";
 import { cn } from "@/lib/utils";
 import { ArchivePanel } from "./components/ArchivePanel";
+import { CasePicker } from "./components/CasePicker";
 import { CasePanel } from "./components/CasePanel";
 import { ChatPanel } from "./components/ChatPanel";
 import { RevealPage } from "./components/RevealPage";
@@ -24,8 +24,8 @@ type Panel = (typeof PANELS)[number];
 /** A loader, not an effect, creates the game, so StrictMode cannot create two. */
 async function startGame({ request }: LoaderFunctionArgs) {
   const requested = new URL(request.url).searchParams.get("case");
-  if (!isCaseId(requested)) return null;
-  const view = await api.createGame(requested);
+  if (requested === null) return null;
+  const view = await api.createGame(requested as CaseId);
   queryClient.setQueryData(gameQuery(view.gameId).queryKey, view);
   return redirect(`/play/${view.gameId}`);
 }
@@ -65,14 +65,7 @@ function StartPage() {
         Every suspect lies to protect a secret. Question them, search the archive, and name the
         culprit.
       </p>
-      <nav aria-label="Cases" className="flex flex-col gap-2">
-        {CASE_IDS.map((id) => (
-          <Link key={id} to={`/?case=${id}`} className={buttonVariants({ size: "lg" })}>
-            Play {id[0]?.toUpperCase()}
-            {id.slice(1)}
-          </Link>
-        ))}
-      </nav>
+      <CasePicker />
     </main>
   );
 }

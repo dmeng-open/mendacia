@@ -86,6 +86,12 @@ export interface SearchHit {
   readonly highlight: readonly HighlightSpan[];
 }
 
+export interface CaseSummary {
+  readonly id: CaseId;
+  readonly title: string;
+  readonly summary: string;
+}
+
 export interface Reveal {
   readonly ruling: string;
   readonly correct: boolean;
@@ -508,6 +514,11 @@ export function createApi(options: ApiOptions = {}) {
   }
 
   return {
+    async listCases(): Promise<CaseSummary[]> {
+      const cases = await read(client.GET("/cases"));
+      return cases.map((c) => ({ id: c.id as CaseId, title: c.title, summary: c.summary }));
+    },
+
     async createGame(caseId: CaseId): Promise<GameView> {
       return parseView(await read(client.POST("/games", { body: { case_id: caseId } })));
     },
