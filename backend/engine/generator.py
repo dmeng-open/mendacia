@@ -131,8 +131,6 @@ def _system() -> Message:
 def generate_case(
     brief: Brief, *, notes: tuple[str, ...] = (), budget: Budget
 ) -> Case | SchemaRejected:
-    """First call: the case without documents; placeholders stand in for the cited ones."""
-
     def send(messages: list[Message]) -> str:
         return complete(
             ModelRole.STRONG,
@@ -142,7 +140,7 @@ def generate_case(
             max_tokens=CORE_MAX_TOKENS,
             prompt_version=PROMPT.version,
             run_id=budget.run_id,
-            timeout=budget.timeout(),
+            timeout=budget.next_call_timeout(),
         ).text
 
     user = PROMPT.render("core", theme=brief.theme, suspects=brief.suspects)
@@ -154,8 +152,6 @@ def generate_case(
 def write_documents(
     core: Case, *, avoid: tuple[str, ...] = (), budget: Budget
 ) -> Case | SchemaRejected:
-    """Second call: the 15 to 20 evidence documents, with source and visibility."""
-
     def send(messages: list[Message]) -> str:
         return complete(
             ModelRole.STRONG,
@@ -165,7 +161,7 @@ def write_documents(
             max_tokens=DOCUMENTS_MAX_TOKENS,
             prompt_version=PROMPT.version,
             run_id=budget.run_id,
-            timeout=budget.timeout(),
+            timeout=budget.next_call_timeout(),
         ).text
 
     avoid_text = PROMPT.render("rejected", problems=_bullets(avoid)) if avoid else ""
@@ -174,14 +170,13 @@ def write_documents(
     return ask(send, documents_parser(core), messages, "documents")
 
 
-def _unsafe(lint: Lint) -> tuple[str, ...]:
-    """Hints for text that must not be echoed; an unsafe id hides every hint that names ids."""
+def _echo_safe_hints(lint: Lint) -> tuple[str, ...]:
     bad_ids = tuple(f.hint for f in lint.findings if f.kind == "id")
     return bad_ids or tuple(f.hint for f in lint.findings if f.kind == "text")
 
 
 def _judge_core(core: Case) -> tuple[Verdict, tuple[str, ...], Step | None]:
-    flagged = _unsafe(lint_case(core))
+    flagged = _echo_safe_hints(lint_case(core))
     if flagged:
         return "core_rejected", flagged, Fresh(flagged)
     report = check_case(core)
@@ -199,7 +194,7 @@ def _documents(
     if isinstance(case, SchemaRejected):
         return "schema_rejected", case.errors, Documents(core, case.errors)
     lint = lint_case(case)
-    hints = _unsafe(lint) or tuple(f.hint for f in lint.findings)
+    hints = _echo_safe_hints(lint) or tuple(f.hint for f in lint.findings)
     if not check_case(case).passed:
         hints += ("the documents changed the solver result",)
     if hints:
@@ -219,7 +214,6 @@ def _core_round(
 
 
 def run_round(brief: Brief, n: int, step: Step, *, budget: Budget) -> tuple[Round, Step | Case]:
-    """One round: one core or documents attempt, gated by schema, lint, and the solver."""
     started = time.monotonic()
     name: Literal["generate", "repair", "documents"]
     match step:

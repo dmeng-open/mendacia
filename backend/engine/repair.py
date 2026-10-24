@@ -69,7 +69,6 @@ def _uniqueness(check: str, verdict: Uniqueness, clues: str) -> list[str]:
 
 
 def repair_instructions(report: CheckReport) -> str:
-    """Turn each failed check into an instruction built from ids only, never model prose."""
     notes: list[str] = []
     match report.consistency:
         case Consistent():
@@ -125,7 +124,7 @@ def repair_case(draft: Case, instructions: str, *, budget: Budget) -> Case | Sch
             max_tokens=REPAIR_MAX_TOKENS,
             prompt_version=PROMPT.version,
             run_id=budget.run_id,
-            timeout=budget.timeout(),
+            timeout=budget.next_call_timeout(),
         ).text
 
     user = PROMPT.render("repair", instructions=instructions, draft=data_block(draft))

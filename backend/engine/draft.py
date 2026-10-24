@@ -30,6 +30,7 @@ _ID = re.compile(r"[a-z][a-z0-9_]*")
 _QUOTED = re.compile(r"'([^']*)'|\"([^\"]*)\"")
 _UNSAFE = re.compile(r"[^A-Za-z0-9 _.,:;()\[\]<>='-]")
 MAX_ERRORS = 20
+MAX_MESSAGE = 300
 TRUSTED_MESSAGES = frozenset(
     {
         "value_error",
@@ -60,15 +61,13 @@ class OverBudget(Exception):
 
 @dataclass(frozen=True)
 class Budget:
-    """Checked before every model call, so no call starts once the generation is spent."""
-
     run_id: str
     max_usd: float
     max_s: float
     spent_usd: Callable[[], float]
     started: float = field(default_factory=time.monotonic)
 
-    def timeout(self) -> float:
+    def next_call_timeout(self) -> float:
         left = self.max_s - (time.monotonic() - self.started)
         if left < MIN_CALL_S or self.spent_usd() >= self.max_usd:
             raise OverBudget
@@ -140,7 +139,6 @@ class CaseDraft(_Model):
 
 
 def placeholders(draft: CaseDraft) -> tuple[EvidenceDoc, ...]:
-    """Empty stand-ins for the documents evidence clues cite, so the solver can run first."""
     cited = dict.fromkeys(c.doc_id for c in draft.clues if c.doc_id is not None)
     chain = {c.doc_id for c in draft.clues if c.id in draft.solution_chain}
     return tuple(
@@ -163,10 +161,7 @@ def documents_parser(core: Case) -> Callable[[str], Case]:
     return lambda reply: draft.to_case(Archive.model_validate_json(reply).documents)
 
 
-def safe(text: str) -> str:
-    """Keep a message prompt-safe: quoted spans survive only when id-shaped, and only an
-    allow-listed character set survives at all."""
-
+def prompt_safe(text: str) -> str:
     def keep(m: re.Match[str]) -> str:
         inner = m.group(1) if m.group(1) is not None else m.group(2)
         return f"'{inner}'" if _ID.fullmatch(inner) else "'<value>'"
@@ -174,7 +169,7 @@ def safe(text: str) -> str:
     quoted = _QUOTED.sub(keep, text)
     if quoted.count("'") % 2:
         quoted = quoted.replace("'", "")
-    return " ".join(_UNSAFE.sub(" ", quoted).split())[:300]
+    return " ".join(_UNSAFE.sub(" ", quoted).split())[:MAX_MESSAGE]
 
 
 def _loc(parts: tuple[int | str, ...]) -> str:
@@ -192,10 +187,10 @@ def schema_errors(error: ValidationError) -> tuple[str, ...]:
     for e in error.errors(include_input=False, include_url=False):
         cause = e.get("ctx", {}).get("error")
         if isinstance(cause, DanglingReferences):
-            lines += [safe(p) for p in cause.problems]
+            lines += [prompt_safe(p) for p in cause.problems]
         else:
             message = e["msg"] if e["type"] in TRUSTED_MESSAGES else e["type"]
-            lines.append(f"{_loc(tuple(e['loc']))}: {safe(message)}")
+            lines.append(f"{_loc(tuple(e['loc']))}: {prompt_safe(message)}")
     return tuple(lines[:MAX_ERRORS])
 
 
@@ -207,8 +202,6 @@ def data_block(core: Case) -> str:
 def ask[T](
     send: Send, parse: Callable[[str], T], messages: list[Message], stage: Stage
 ) -> T | SchemaRejected:
-    """Parse the reply; on a schema error, ask once more with the safe error list only.
-    The rejected reply is never sent back: it has passed no lint."""
     try:
         return parse(send(messages))
     except ValidationError as first:
