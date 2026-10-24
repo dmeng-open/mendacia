@@ -82,7 +82,6 @@ A previous attempt was rejected. Fix these problems:
 $problems
 
 @@ schema_feedback
-Your reply did not match the schema. Reply with the corrected JSON only.
-
-Errors:
+An earlier reply to this request did not match the schema. Write the whole JSON
+again, and avoid these errors:
 $errors

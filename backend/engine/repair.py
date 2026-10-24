@@ -3,6 +3,7 @@ from collections.abc import Sequence
 from app.llm import ModelRole, complete
 from engine.draft import (
     PROMPT,
+    Budget,
     CaseDraft,
     Message,
     SchemaRejected,
@@ -114,7 +115,7 @@ def repair_instructions(report: CheckReport) -> str:
     return "\n".join(f"- {n}" for n in notes)
 
 
-def repair_case(draft: Case, instructions: str, *, run_id: str) -> Case | SchemaRejected:
+def repair_case(draft: Case, instructions: str, *, budget: Budget) -> Case | SchemaRejected:
     def send(messages: list[Message]) -> str:
         return complete(
             ModelRole.STRONG,
@@ -123,7 +124,8 @@ def repair_case(draft: Case, instructions: str, *, run_id: str) -> Case | Schema
             purpose="repair",
             max_tokens=REPAIR_MAX_TOKENS,
             prompt_version=PROMPT.version,
-            run_id=run_id,
+            run_id=budget.run_id,
+            timeout=budget.timeout(),
         ).text
 
     user = PROMPT.render("repair", instructions=instructions, draft=data_block(draft))

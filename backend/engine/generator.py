@@ -17,15 +17,17 @@ from app.llm import LLM_CALLS, ModelRole, complete
 from engine.draft import (
     PROMPT,
     Archive,
+    Budget,
     CaseDraft,
     Message,
+    OverBudget,
     SchemaRejected,
     ask,
     data_block,
     documents_parser,
     parse_core,
 )
-from engine.evidence import lint_case
+from engine.evidence import Lint, lint_case
 from engine.repair import repair_case, repair_instructions
 from engine.schema import Case
 from engine.solver import check_case
@@ -33,8 +35,8 @@ from security.context import case_version
 
 CORE_MAX_TOKENS = 16000
 DOCUMENTS_MAX_TOKENS = 12000
-BUDGET_USD = 0.85
-BUDGET_S = 240
+BUDGET_USD = 0.70
+BUDGET_S = 280
 OUT = Path(__file__).resolve().parents[2] / "cases" / "generated"
 THEMES = (
     "a snowbound mountain observatory during a meteor shower",
@@ -127,7 +129,7 @@ def _system() -> Message:
 
 
 def generate_case(
-    brief: Brief, *, notes: tuple[str, ...] = (), run_id: str
+    brief: Brief, *, notes: tuple[str, ...] = (), budget: Budget
 ) -> Case | SchemaRejected:
     """First call: the case without documents; placeholders stand in for the cited ones."""
 
@@ -139,7 +141,8 @@ def generate_case(
             purpose="generate",
             max_tokens=CORE_MAX_TOKENS,
             prompt_version=PROMPT.version,
-            run_id=run_id,
+            run_id=budget.run_id,
+            timeout=budget.timeout(),
         ).text
 
     user = PROMPT.render("core", theme=brief.theme, suspects=brief.suspects)
@@ -149,7 +152,7 @@ def generate_case(
 
 
 def write_documents(
-    core: Case, *, avoid: tuple[str, ...] = (), run_id: str
+    core: Case, *, avoid: tuple[str, ...] = (), budget: Budget
 ) -> Case | SchemaRejected:
     """Second call: the 15 to 20 evidence documents, with source and visibility."""
 
@@ -161,7 +164,8 @@ def write_documents(
             purpose="generate",
             max_tokens=DOCUMENTS_MAX_TOKENS,
             prompt_version=PROMPT.version,
-            run_id=run_id,
+            run_id=budget.run_id,
+            timeout=budget.timeout(),
         ).text
 
     avoid_text = PROMPT.render("rejected", problems=_bullets(avoid)) if avoid else ""
@@ -170,8 +174,14 @@ def write_documents(
     return ask(send, documents_parser(core), messages, "documents")
 
 
+def _unsafe(lint: Lint) -> tuple[str, ...]:
+    """Hints for text that must not be echoed; an unsafe id hides every hint that names ids."""
+    bad_ids = tuple(f.hint for f in lint.findings if f.kind == "id")
+    return bad_ids or tuple(f.hint for f in lint.findings if f.kind == "text")
+
+
 def _judge_core(core: Case) -> tuple[Verdict, tuple[str, ...], Step | None]:
-    flagged = tuple(f.hint for f in lint_case(core).findings if f.text)
+    flagged = _unsafe(lint_case(core))
     if flagged:
         return "core_rejected", flagged, Fresh(flagged)
     report = check_case(core)
@@ -183,12 +193,13 @@ def _judge_core(core: Case) -> tuple[Verdict, tuple[str, ...], Step | None]:
 
 
 def _documents(
-    core: Case, avoid: tuple[str, ...], run_id: str
+    core: Case, avoid: tuple[str, ...], budget: Budget
 ) -> tuple[Verdict, tuple[str, ...], Step | Case]:
-    case = write_documents(core, avoid=avoid, run_id=run_id)
+    case = write_documents(core, avoid=avoid, budget=budget)
     if isinstance(case, SchemaRejected):
         return "schema_rejected", case.errors, Documents(core, case.errors)
-    hints = tuple(f.hint for f in lint_case(case).findings)
+    lint = lint_case(case)
+    hints = _unsafe(lint) or tuple(f.hint for f in lint.findings)
     if not check_case(case).passed:
         hints += ("the documents changed the solver result",)
     if hints:
@@ -197,33 +208,33 @@ def _documents(
 
 
 def _core_round(
-    got: Case | SchemaRejected, retry: Step, run_id: str
+    got: Case | SchemaRejected, retry: Step, budget: Budget
 ) -> tuple[Verdict, tuple[str, ...], Step | Case]:
     if isinstance(got, SchemaRejected):
         return "schema_rejected", got.errors, retry
     verdict, notes, nxt = _judge_core(got)
     if nxt is None:
-        return _documents(got, (), run_id)
+        return _documents(got, (), budget)
     return verdict, notes, nxt
 
 
-def run_round(brief: Brief, n: int, step: Step, *, run_id: str) -> tuple[Round, Step | Case]:
+def run_round(brief: Brief, n: int, step: Step, *, budget: Budget) -> tuple[Round, Step | Case]:
     """One round: one core or documents attempt, gated by schema, lint, and the solver."""
     started = time.monotonic()
     name: Literal["generate", "repair", "documents"]
     match step:
         case Fresh(prior):
             name = "generate"
-            got = generate_case(brief, notes=prior, run_id=run_id)
+            got = generate_case(brief, notes=prior, budget=budget)
             retry = Fresh(got.errors) if isinstance(got, SchemaRejected) else step
-            verdict, notes, nxt = _core_round(got, retry, run_id)
+            verdict, notes, nxt = _core_round(got, retry, budget)
         case Repair(draft, instructions):
             name = "repair"
-            got = repair_case(draft, instructions, run_id=run_id)
-            verdict, notes, nxt = _core_round(got, step, run_id)
+            got = repair_case(draft, instructions, budget=budget)
+            verdict, notes, nxt = _core_round(got, step, budget)
         case Documents(core, avoid):
             name = "documents"
-            verdict, notes, nxt = _documents(core, avoid, run_id)
+            verdict, notes, nxt = _documents(core, avoid, budget)
     elapsed = round((time.monotonic() - started) * 1000)
     return Round(n, name, verdict, notes, elapsed), nxt
 
@@ -292,7 +303,10 @@ def _finish(
         )
 
 
-def _reason(kind: str, last: Round) -> str:
+def _reason(kind: str, rounds: list[Round]) -> str:
+    if not rounds:
+        return f"{kind}: before round 1"
+    last = rounds[-1]
     detail = f": {last.notes[0]}" if last.notes else ""
     return f"{kind}: round {last.n} {last.step} {last.verdict}{detail}"
 
@@ -300,26 +314,25 @@ def _reason(kind: str, last: Round) -> str:
 def generate_with_repair(brief: Brief, max_rounds: int = 5) -> GenerationResult:
     generation_id = uuid4().hex
     _start(generation_id, brief)
-    started = time.monotonic()
+    budget = Budget(generation_id, BUDGET_USD, BUDGET_S, lambda: spent_usd(generation_id))
     rounds: list[Round] = []
     step: Step = Fresh()
     try:
         for n in range(1, max_rounds + 1):
-            over = spent_usd(generation_id) >= BUDGET_USD or time.monotonic() - started >= BUDGET_S
-            if rounds and over:
-                _finish(generation_id, "discarded", _reason("budget", rounds[-1]))
-                return Discarded(generation_id, "budget", tuple(rounds))
-            rnd, nxt = run_round(brief, n, step, run_id=generation_id)
+            rnd, nxt = run_round(brief, n, step, budget=budget)
             rounds.append(rnd)
             _record(generation_id, rnd)
             if isinstance(nxt, Case):
                 _finish(generation_id, "accepted", case=nxt)
                 return Accepted(generation_id, nxt, tuple(rounds))
             step = nxt
+    except OverBudget:
+        _finish(generation_id, "discarded", _reason("budget", rounds))
+        return Discarded(generation_id, "budget", tuple(rounds))
     except BaseException as error:
         _finish(generation_id, "crashed", type(error).__name__)
         raise
-    _finish(generation_id, "discarded", _reason("max_rounds", rounds[-1]))
+    _finish(generation_id, "discarded", _reason("max_rounds", rounds))
     return Discarded(generation_id, "max_rounds", tuple(rounds))
 
 

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 import sqlalchemy as sa
 
-from engine import generator
+from engine import draft, generator
 from engine.cli import load_case
 from engine.generator import Discarded, generate_with_repair
 from engine.mutate import add_contradiction, drop_clue
@@ -145,14 +145,24 @@ def test_a_case_that_fails_five_rounds_is_discarded_with_its_reason() -> None:
     assert "dr_finch" in row.failure_reason
 
 
-def test_the_budget_stops_new_rounds(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(generator, "BUDGET_S", 0)
+def test_no_call_starts_once_the_money_is_spent(monkeypatch: pytest.MonkeyPatch) -> None:
+    spent = iter([0.0, 0.69, 0.71])
+    monkeypatch.setattr(generator, "spent_usd", lambda _: next(spent, 0.71))
     scenario = SCENARIOS["discarded"]
 
     result = generate_with_repair(scenario.brief, scenario.max_rounds)
 
     assert isinstance(result, Discarded)
-    assert (result.reason, len(result.rounds)) == ("budget", 1)
+    assert (result.reason, [r.step for r in result.rounds]) == ("budget", ["generate", "repair"])
+
+
+def test_no_call_starts_once_the_time_is_spent(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(generator, "BUDGET_S", draft.MIN_CALL_S - 1)
+
+    result = generate_with_repair(SCENARIOS["discarded"].brief)
+
+    assert isinstance(result, Discarded)
+    assert (result.reason, result.rounds) == ("budget", ())
 
 
 def test_a_crash_marks_the_log_row_crashed(monkeypatch: pytest.MonkeyPatch) -> None:

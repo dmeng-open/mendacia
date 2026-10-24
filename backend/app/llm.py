@@ -150,6 +150,7 @@ def complete(
     max_tokens: int | None = None,
     prompt_version: str | None = None,
     run_id: str | None = None,
+    timeout: float | None = None,
 ) -> Completion:
     request = {
         "messages": messages,
@@ -165,6 +166,7 @@ def complete(
             messages=messages,
             max_tokens=max_tokens,
             response_format=response_format,
+            timeout=timeout,
             **kwargs,
         )
         return response, litellm.completion_cost(response)

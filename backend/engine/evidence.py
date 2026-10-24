@@ -6,12 +6,14 @@ from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 from types import ModuleType
+from typing import Literal
 
 from agents.documents import invisible, plain
 from agents.screening import screen_input
 from engine.schema import Case, EvidenceDoc, Id, Unlock
 
 MIN_DOCS = 15
+MAX_ID = 40
 MAX_DOCS = 20
 SCANNER = Path(__file__).resolve().parents[2] / "scripts" / "scan_instructions.py"
 ROLE_MARKER = re.compile(
@@ -26,7 +28,7 @@ MODEL_MARKER = re.compile(
 class Finding:
     message: str
     hint: str
-    text: bool = True
+    kind: Literal["structure", "text", "id"] = "text"
 
 
 @dataclass(frozen=True)
@@ -43,7 +45,7 @@ class Lint:
 
 
 def _structural(message: str) -> Finding:
-    return Finding(message, message, text=False)
+    return Finding(message, message, kind="structure")
 
 
 def _unlockers(doc: EvidenceDoc) -> frozenset[Id]:
@@ -78,6 +80,45 @@ def _scanner() -> ModuleType:
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def ids(case: Case) -> list[tuple[str, str]]:
+    return [
+        ("case id", case.id),
+        *((f"people[{i}].id", p.id) for i, p in enumerate(case.people)),
+        *((f"locations key {i}", k) for i, k in enumerate(case.locations)),
+        *((f"items key {i}", k) for i, k in enumerate(case.items)),
+        *((f"facts[{i}].id", f.id) for i, f in enumerate(case.facts)),
+        *((f"planned_lies[{i}].id", lie.id) for i, lie in enumerate(case.planned_lies)),
+        *((f"clues[{i}].id", c.id) for i, c in enumerate(case.clues)),
+        *(
+            (f"documents[{i}].{part}", value)
+            for i, d in enumerate(case.documents)
+            for part, value in (("id", d.id), ("source", d.source))
+        ),
+    ]
+
+
+def _id_findings(case: Case) -> list[Finding]:
+    found: list[Finding] = []
+    for where, value in ids(case):
+        if len(value) > MAX_ID:
+            found.append(
+                Finding(
+                    f"unsafe_id: {where} '{value}' is longer than {MAX_ID}",
+                    f"unsafe_id: {where} is too long",
+                    "id",
+                )
+            )
+        elif (screened := screen_input(value.replace("_", " "))).rule is not None:
+            found.append(
+                Finding(
+                    f"unsafe_id: {where} '{value}': {screened.rule.value}",
+                    f"unsafe_id: {where} reads as an instruction",
+                    "id",
+                )
+            )
+    return found
 
 
 def prose(case: Case) -> list[tuple[str, str]]:
@@ -165,7 +206,7 @@ def lint_case(case: Case) -> Lint:
         for d in locked
         if d.id not in reachable
     ]
-    findings = [_structural(p) for p in problems]
+    findings = [*_id_findings(case), *(_structural(p) for p in problems)]
     for where, text in prose(case):
         findings += _text_findings(where, text)
     key = sum(d.is_key for d in case.documents)

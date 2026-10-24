@@ -1,7 +1,8 @@
 import json
 import re
+import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, Self
 
 from pydantic import Field, ValidationError, model_validator
@@ -27,7 +28,51 @@ Stage = Literal["core", "documents"]
 
 _ID = re.compile(r"[a-z][a-z0-9_]*")
 _QUOTED = re.compile(r"'([^']*)'|\"([^\"]*)\"")
+_UNSAFE = re.compile(r"[^A-Za-z0-9 _.,:;()\[\]<>='-]")
 MAX_ERRORS = 20
+TRUSTED_MESSAGES = frozenset(
+    {
+        "value_error",
+        "missing",
+        "extra_forbidden",
+        "string_pattern_mismatch",
+        "string_type",
+        "int_type",
+        "int_parsing",
+        "bool_type",
+        "literal_error",
+        "too_short",
+        "tuple_type",
+        "model_type",
+        "dict_type",
+        "json_invalid",
+        "union_tag_invalid",
+    }
+)
+
+
+MIN_CALL_S = 20
+
+
+class OverBudget(Exception):
+    pass
+
+
+@dataclass(frozen=True)
+class Budget:
+    """Checked before every model call, so no call starts once the generation is spent."""
+
+    run_id: str
+    max_usd: float
+    max_s: float
+    spent_usd: Callable[[], float]
+    started: float = field(default_factory=time.monotonic)
+
+    def timeout(self) -> float:
+        left = self.max_s - (time.monotonic() - self.started)
+        if left < MIN_CALL_S or self.spent_usd() >= self.max_usd:
+            raise OverBudget
+        return left
 
 
 @dataclass(frozen=True)
@@ -119,14 +164,17 @@ def documents_parser(core: Case) -> Callable[[str], Case]:
 
 
 def safe(text: str) -> str:
-    """Keep a model-derived message prompt-safe: quoted spans survive only when id-shaped."""
+    """Keep a message prompt-safe: quoted spans survive only when id-shaped, and only an
+    allow-listed character set survives at all."""
 
     def keep(m: re.Match[str]) -> str:
         inner = m.group(1) if m.group(1) is not None else m.group(2)
-        return m.group(0) if _ID.fullmatch(inner) else "'<value>'"
+        return f"'{inner}'" if _ID.fullmatch(inner) else "'<value>'"
 
-    ascii_only = _QUOTED.sub(keep, text).encode("ascii", "ignore").decode()
-    return " ".join(ascii_only.split())[:300]
+    quoted = _QUOTED.sub(keep, text)
+    if quoted.count("'") % 2:
+        quoted = quoted.replace("'", "")
+    return " ".join(_UNSAFE.sub(" ", quoted).split())[:300]
 
 
 def _loc(parts: tuple[int | str, ...]) -> str:
@@ -146,7 +194,8 @@ def schema_errors(error: ValidationError) -> tuple[str, ...]:
         if isinstance(cause, DanglingReferences):
             lines += [safe(p) for p in cause.problems]
         else:
-            lines.append(f"{_loc(tuple(e['loc']))}: {safe(e['msg'])}")
+            message = e["msg"] if e["type"] in TRUSTED_MESSAGES else e["type"]
+            lines.append(f"{_loc(tuple(e['loc']))}: {safe(message)}")
     return tuple(lines[:MAX_ERRORS])
 
 
@@ -158,15 +207,14 @@ def data_block(core: Case) -> str:
 def ask[T](
     send: Send, parse: Callable[[str], T], messages: list[Message], stage: Stage
 ) -> T | SchemaRejected:
-    """Parse the reply; on a schema error, send the safe error list back once."""
-    reply = send(messages)
+    """Parse the reply; on a schema error, ask once more with the safe error list only.
+    The rejected reply is never sent back: it has passed no lint."""
     try:
-        return parse(reply)
+        return parse(send(messages))
     except ValidationError as first:
         errors = schema_errors(first)
     retry = [
         *messages,
-        {"role": "assistant", "content": reply},
         {"role": "user", "content": PROMPT.render("schema_feedback", errors="\n".join(errors))},
     ]
     try:
