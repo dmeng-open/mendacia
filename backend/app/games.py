@@ -507,6 +507,7 @@ class GameService:
             "drafts": len(report.attempts),
             "verdicts": sorted(c.verdict.value for c in report.checks),
             "claims": [c.claim.model_dump(mode="json") for c in report.checks],
+            "turn_ms": round((datetime.now(UTC) - started).total_seconds() * 1000),
         }
         out = Outcome(reply=report.reply, new_clues=self._found(g, s, nxt))
         reason = "fallback" if report.fell_back else "released"
