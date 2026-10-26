@@ -74,15 +74,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if git diff --quiet -- backend/evals/attacks/regressions.yaml; then
+          file=backend/evals/attacks/regressions.yaml
+          if [ -z "$(git status --porcelain -- "$file")" ]; then
             exit 0
           fi
+          git add -N "$file"
           {
             echo "The live eval run ${{ github.run_id }} found attacks that did not hold."
             echo
             echo "Reproductions were added to backend/evals/attacks/regressions.yaml and the"
             echo "proposed fixes are under reports/proposals/ in the eval-reports artifact."
             echo
-            git diff -- backend/evals/attacks/regressions.yaml
+            git diff -- "$file"
           } > issue.md
           gh issue create --title "live-eval: new failing attacks (run ${{ github.run_id }})" --body-file issue.md
