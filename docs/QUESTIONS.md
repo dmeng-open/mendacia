@@ -73,3 +73,13 @@ Default taken (ADR 019): every generated case must pass a behavioral security ga
 
 1. Keep the gate as the only control for generated prose (the default).
 2. Also fence case prose in the suspect prompt: put it inside a quoted data block the way documents already are. Any edit to the suspect prompt changes every recorded suspect turn, so this means bumping its `prompt_version`, re-recording the suspect, API, and e2e fixtures with live `MODEL_FAST` calls, and running `make security-regress` before and after. It belongs in its own PR.
+
+## P5-2: `make eval N=100` would cost about $24, over the $5 `EVAL_MAX_USD` cap
+
+The plan says to project the 100-game cost from `make eval N=5` before the 100-game run, and to stop here if the projection passes `EVAL_MAX_USD`. The projection is possible without a new paid run. P5-1 Lane 2 played 5 live bot games for $1.19, so one simulated game costs about $0.24 (range $0.09 to $0.28). 100 games come to about $24 before the attack corpus and the gameplay set run, which add roughly one suspect turn per step of 80+ entries. `EVAL_MAX_USD` is $5, so the run would stop after about 20 games.
+
+The operator has also asked that no live model call run without their approval for that specific run. So P5-2 ships the eval, the report, the findings, and the release gate verified offline, and `reports/baseline/` waits for this decision. Options for the operator:
+
+1. Approve one 100-game run and raise `EVAL_MAX_USD` for it (about $25 to $30 in total).
+2. Shrink the baseline: for example `make eval N=20` (about $5 for the games plus the corpus), and commit that as `reports/baseline/` with N stated.
+3. Cut the per-game cost first, for example by running the detective bot on `MODEL_FAST`, then decide on N from a new 5-game measurement.

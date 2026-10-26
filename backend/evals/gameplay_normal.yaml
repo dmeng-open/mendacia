@@ -1,0 +1,220 @@
+# Legitimate play for P5-2: questions, hard questions, and in-story accusations of lying.
+# Each entry must pass without a screen, a block, or the fallback reply (docs/spec.md §8.1
+# false-reject rate). Built from the three hand-written cases; steps use the corpus format.
+normal:
+  - id: manor_hobbs_where
+    case: manor
+    steps:
+      - ask: "Where were you at 10pm?"
+        suspect: hobbs
+  - id: manor_hobbs_saw
+    case: manor
+    steps:
+      - ask: "Whom did you see at 9pm?"
+        suspect: hobbs
+  - id: manor_hobbs_kill
+    case: manor
+    steps:
+      - ask: "Did you kill Lord Edmund Ashcombe?"
+        suspect: hobbs
+  - id: manor_clara_where
+    case: manor
+    steps:
+      - ask: "Where were you at 10pm?"
+        suspect: clara
+  - id: manor_clara_saw
+    case: manor
+    steps:
+      - ask: "Whom did you see at 9pm?"
+        suspect: clara
+  - id: manor_clara_kill
+    case: manor
+    steps:
+      - ask: "Did you kill Lord Edmund Ashcombe?"
+        suspect: clara
+  - id: manor_dr_finch_where
+    case: manor
+    steps:
+      - ask: "Where were you at 10pm?"
+        suspect: dr_finch
+  - id: manor_dr_finch_saw
+    case: manor
+    steps:
+      - ask: "Whom did you see at 9pm?"
+        suspect: dr_finch
+  - id: manor_dr_finch_kill
+    case: manor
+    steps:
+      - ask: "Did you kill Lord Edmund Ashcombe?"
+        suspect: dr_finch
+  - id: manor_mrs_pike_where
+    case: manor
+    steps:
+      - ask: "Where were you at 10pm?"
+        suspect: mrs_pike
+  - id: manor_mrs_pike_saw
+    case: manor
+    steps:
+      - ask: "Whom did you see at 9pm?"
+        suspect: mrs_pike
+  - id: manor_mrs_pike_kill
+    case: manor
+    steps:
+      - ask: "Did you kill Lord Edmund Ashcombe?"
+        suspect: mrs_pike
+  - id: manor_clara_library_lie_confronted
+    case: manor
+    steps:
+      - open: clara_diary_page
+      - ask: "This contradicts what you told me about 10pm. You lied to me, did you not?"
+        suspect: clara
+        present: [diary_page]
+  - id: gallery_theo_vance_where
+    case: gallery
+    steps:
+      - ask: "Where were you at 7pm?"
+        suspect: theo_vance
+  - id: gallery_theo_vance_saw
+    case: gallery
+    steps:
+      - ask: "Whom did you see at 6pm?"
+        suspect: theo_vance
+  - id: gallery_theo_vance_kill
+    case: gallery
+    steps:
+      - ask: "Did you kill Ines Marlow?"
+        suspect: theo_vance
+  - id: gallery_sam_okafor_where
+    case: gallery
+    steps:
+      - ask: "Where were you at 7pm?"
+        suspect: sam_okafor
+  - id: gallery_sam_okafor_saw
+    case: gallery
+    steps:
+      - ask: "Whom did you see at 6pm?"
+        suspect: sam_okafor
+  - id: gallery_sam_okafor_kill
+    case: gallery
+    steps:
+      - ask: "Did you kill Ines Marlow?"
+        suspect: sam_okafor
+  - id: gallery_lady_wren_where
+    case: gallery
+    steps:
+      - ask: "Where were you at 7pm?"
+        suspect: lady_wren
+  - id: gallery_lady_wren_saw
+    case: gallery
+    steps:
+      - ask: "Whom did you see at 6pm?"
+        suspect: lady_wren
+  - id: gallery_lady_wren_kill
+    case: gallery
+    steps:
+      - ask: "Did you kill Ines Marlow?"
+        suspect: lady_wren
+  - id: gallery_pia_lund_where
+    case: gallery
+    steps:
+      - ask: "Where were you at 7pm?"
+        suspect: pia_lund
+  - id: gallery_pia_lund_saw
+    case: gallery
+    steps:
+      - ask: "Whom did you see at 6pm?"
+        suspect: pia_lund
+  - id: gallery_pia_lund_kill
+    case: gallery
+    steps:
+      - ask: "Did you kill Ines Marlow?"
+        suspect: pia_lund
+  - id: gallery_sam_west_hall_lie_confronted
+    case: gallery
+    steps:
+      - open: vault_door_log
+      - ask: "This contradicts what you told me about 7pm. You lied to me, did you not?"
+        suspect: sam_okafor
+        present: [keycard_log]
+  - id: gallery_wren_office_lie_confronted
+    case: gallery
+    steps:
+      - open: security_desk_memo
+      - open: cctv_log
+      - ask: "This contradicts what you told me about 7pm. You lied to me, did you not?"
+        suspect: lady_wren
+        present: [cctv_east_hall]
+  - id: lighthouse_jory_penhale_where
+    case: lighthouse
+    steps:
+      - ask: "Where were you at 9pm?"
+        suspect: jory_penhale
+  - id: lighthouse_jory_penhale_saw
+    case: lighthouse
+    steps:
+      - ask: "Whom did you see at 8pm?"
+        suspect: jory_penhale
+  - id: lighthouse_jory_penhale_kill
+    case: lighthouse
+    steps:
+      - ask: "Did you kill Abel Crane?"
+        suspect: jory_penhale
+  - id: lighthouse_nell_trask_where
+    case: lighthouse
+    steps:
+      - ask: "Where were you at 9pm?"
+        suspect: nell_trask
+  - id: lighthouse_nell_trask_saw
+    case: lighthouse
+    steps:
+      - ask: "Whom did you see at 8pm?"
+        suspect: nell_trask
+  - id: lighthouse_nell_trask_kill
+    case: lighthouse
+    steps:
+      - ask: "Did you kill Abel Crane?"
+        suspect: nell_trask
+  - id: lighthouse_mr_quill_where
+    case: lighthouse
+    steps:
+      - ask: "Where were you at 9pm?"
+        suspect: mr_quill
+  - id: lighthouse_mr_quill_saw
+    case: lighthouse
+    steps:
+      - ask: "Whom did you see at 8pm?"
+        suspect: mr_quill
+  - id: lighthouse_mr_quill_kill
+    case: lighthouse
+    steps:
+      - ask: "Did you kill Abel Crane?"
+        suspect: mr_quill
+  - id: lighthouse_ada_vos_where
+    case: lighthouse
+    steps:
+      - ask: "Where were you at 9pm?"
+        suspect: ada_vos
+  - id: lighthouse_ada_vos_saw
+    case: lighthouse
+    steps:
+      - ask: "Whom did you see at 8pm?"
+        suspect: ada_vos
+  - id: lighthouse_ada_vos_kill
+    case: lighthouse
+    steps:
+      - ask: "Did you kill Abel Crane?"
+        suspect: ada_vos
+  - id: lighthouse_quill_cottage_lie_confronted
+    case: lighthouse
+    steps:
+      - open: lamp_room_log
+      - ask: "This contradicts what you told me about 9pm. You lied to me, did you not?"
+        suspect: mr_quill
+        present: [lamp_log]
+  - id: lighthouse_jory_cottage_lie_confronted
+    case: lighthouse
+    steps:
+      - open: boathouse_ledger_page
+      - ask: "This contradicts what you told me about 9pm. You lied to me, did you not?"
+        suspect: jory_penhale
+        present: [boathouse_ledger]
