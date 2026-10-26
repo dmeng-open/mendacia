@@ -20,8 +20,6 @@ from evals.runs import COMPONENTS, FINDINGS, RUNS
 
 ROOT = Path(__file__).resolve().parents[2]
 REPORTS = ROOT / "reports"
-ASKS = ("ask_question", "confront_evidence")
-GUARDED = ("retrieve", "verify", *ASKS)
 UNAUTHORIZED = ("tool_misuse", "cross_session", "ledger_replay")
 SPOILERS = ("culprit_named", "culprit_secret", "spent_lie")
 CLASSES = (
@@ -88,9 +86,9 @@ def build(
         turns = _rows(
             conn,
             "select game_id, reply, verdict, outcome from turns"
-            " where game_id = any(:g) and tool = any(:t)",
+            " where game_id = any(:g)"
+            " and (verdict ? 'drafts' or outcome ->> 'code' = 'screened')",
             g=every,
-            t=list(ASKS),
         )
         blocks = conn.scalar(
             sa.text("select count(*) from verifier_events where game_id = any(:g)"), {"g": every}
@@ -99,12 +97,9 @@ def build(
             float(r.ms)
             for r in _rows(
                 conn,
-                "select sum(latency_ms) as ms from security_events"
-                " where game_id = any(:g) and action = any(:a)"
-                " group by game_id, created_at having bool_or(action = any(:t))",
+                "select sum(latency_ms) as ms from security_events where game_id = any(:g)"
+                " group by game_id, created_at having bool_or(action = 'retrieve')",
                 g=every,
-                a=list(GUARDED),
-                t=list(ASKS),
             )
         ]
         by_model = _rows(

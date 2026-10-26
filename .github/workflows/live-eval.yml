@@ -1,0 +1,88 @@
+name: live-eval
+
+# Live security and quality eval (P5-2). It calls real models, so it never runs on a pull
+# request: only by hand with a spend cap, or weekly under EVAL_MAX_USD. A run that finds a new
+# failing attack opens an issue that names the reproduction.
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_usd:
+        description: Spend cap for this run in USD
+        required: true
+        default: "5"
+      games:
+        description: Simulated games to play
+        required: true
+        default: "5"
+  schedule:
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: mendacia
+          POSTGRES_PASSWORD: mendacia
+          POSTGRES_DB: mendacia
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mendacia -d mendacia"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      DATABASE_URL: postgresql+psycopg://mendacia:mendacia@localhost/mendacia
+      PGPASSWORD: mendacia
+      MODEL_FAST: ${{ vars.MODEL_FAST }}
+      MODEL_STRONG: ${{ vars.MODEL_STRONG }}
+      MODEL_EMBED: ${{ vars.MODEL_EMBED }}
+      EMBED_DIM: ${{ vars.EMBED_DIM }}
+      MENDACIA_ANTHROPIC_API_KEY: ${{ secrets.MENDACIA_ANTHROPIC_API_KEY }}
+      MENDACIA_OPENAI_API_KEY: ${{ secrets.MENDACIA_OPENAI_API_KEY }}
+      EVAL_MAX_USD: ${{ inputs.max_usd || vars.EVAL_MAX_USD }}
+      SESSION_SECRET: live-eval-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+      - run: make setup
+      - run: make migrate
+      - run: make seed
+      - name: Run the eval
+        run: make eval N=${{ inputs.games || '5' }}
+        env:
+          LLM_MODE: live
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: eval-reports
+          path: |
+            reports/
+            backend/evals/attacks/regressions.yaml
+      - name: Open an issue for new failing attacks
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- backend/evals/attacks/regressions.yaml; then
+            exit 0
+          fi
+          {
+            echo "The live eval run ${{ github.run_id }} found attacks that did not hold."
+            echo
+            echo "Reproductions were added to backend/evals/attacks/regressions.yaml and the"
+            echo "proposed fixes are under reports/proposals/ in the eval-reports artifact."
+            echo
+            git diff -- backend/evals/attacks/regressions.yaml
+          } > issue.md
+          gh issue create --title "live-eval: new failing attacks (run ${{ github.run_id }})" --body-file issue.md

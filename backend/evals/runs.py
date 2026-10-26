@@ -206,3 +206,13 @@ def finish(run_id: str, status: str, sim_run_id: str | None) -> None:
                 prompt_versions=versions["prompts"],
             )
         )
+
+
+def spent(run_id: str) -> float:
+    with sync_engine(Settings().database_url).connect() as conn:
+        total = conn.scalar(
+            sa.select(sa.func.coalesce(sa.func.sum(LLM_CALLS.c.cost_usd), 0.0)).where(
+                LLM_CALLS.c.run_id == run_id, LLM_CALLS.c.mode != "replay"
+            )
+        )
+    return float(total or 0.0)

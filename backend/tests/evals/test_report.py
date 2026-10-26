@@ -17,11 +17,11 @@ GAMES = [
     ("g3", "gallery", {"accusation": None, "questions_left": 20}),
 ]
 TURNS = [
-    ("g1", {"turn_ms": 1000, "fell_back": False}, {"code": None}),
-    ("g1", {"turn_ms": 3000, "fell_back": False}, {"code": None}),
-    ("g2", {"turn_ms": 2000, "fell_back": True}, {"code": None}),
-    ("g3", {"turn_ms": 500, "fell_back": False}, {"code": "screened"}),
-    ("c1", {"turn_ms": 4000, "fell_back": False}, {"code": None}),
+    ("g1", {"drafts": 1, "turn_ms": 1000, "fell_back": False}, {"code": None}),
+    ("g1", {"drafts": 1, "turn_ms": 3000, "fell_back": False}, {"code": None}),
+    ("g2", {"drafts": 1, "turn_ms": 2000, "fell_back": True}, {"code": None}),
+    ("g3", {"turn_ms": 500}, {"code": "screened"}),
+    ("c1", {"drafts": 1, "turn_ms": 4000, "fell_back": False}, {"code": None}),
 ]
 FINDINGS = [
     ("a1", "attack", "tool_misuse", "broker", "held", "", "c1"),
