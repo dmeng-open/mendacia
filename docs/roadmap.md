@@ -1,6 +1,6 @@
 # Mendacia roadmap
 
-This is the full-project plan, final version. It describes where Mendacia goes after the MVP. **Nothing here is in progress.** Agents do not build from this file unless a phase of `docs/plan.md` points to a section of it. When a stage starts, its section becomes PRs in `docs/plan.md` with the same checklist format, and its rules move into `docs/spec.md`.
+This is the full-project plan, final version. It describes where Mendacia goes after the MVP. Stages B1 and E are scheduled as Phases 6 and 7 of `docs/plan.md`, before the first deployment. **Nothing else here is scheduled.** Agents do not build from this file unless a phase of `docs/plan.md` points to a section of it. When a stage starts, its section becomes PRs in `docs/plan.md` with the same checklist format, and its rules move into `docs/spec.md`.
 
 Sources:
 
@@ -183,8 +183,8 @@ Model output, retrieved documents, and user input never decide an authorization.
 | clingo (Z3 as a fallback) | Uniqueness, contradiction, necessity | MVP. The solver and the full Truth are never exposed to a suspect |
 | PostgreSQL + pgvector | Facts, sessions, ACL, retrieval | MVP. Measure data size, QPS, and p95 before splitting out a vector engine. PG full-text search is not BM25; add a BM25 engine only when a recall and latency benchmark asks for it |
 | LiteLLM | One model wrapper with cost logging and replay | MVP. Provider keys stay on the server; each purpose has its own model, budget, and log sensitivity |
-| Cloud Run + Cloud SQL + Terraform | Hosting | MVP (P6-1, P6-2) |
-| OpenTelemetry → Cloud Trace (Langfuse optional) | Traces and cost | MVP baseline in P6-2. Unify game, turn, job, trace, and policy IDs. Langfuse only if the prompt and eval workflow needs it |
+| Cloud Run + Cloud SQL + Terraform | Hosting | MVP (P8-1, P8-2) |
+| OpenTelemetry → Cloud Trace (Langfuse optional) | Traces and cost | MVP baseline in P8-2. Unify game, turn, job, trace, and policy IDs. Langfuse only if the prompt and eval workflow needs it |
 | Redis | Cache, leaderboard | Stage D, one use at a time. Lie ledger and permission state are never cached across players; Postgres stays the source of truth |
 | RabbitMQ (with Celery) | Retryable background commands | Stage D or G, when the Postgres outbox plus workers misses its queue SLA. Dead letters and a manual inspection path. Do not add two brokers without a reason |
 | Kafka | Replayable high-volume event stream | Stage G, only when event volume, consumer count, and retention needs prove it. RabbitMQ and Kafka do different jobs |
@@ -319,13 +319,13 @@ Mendacia takes the ideas (zero trust, continuous evaluation, policy outside the 
 
 Each stage lists its goal, what it delivers, the architecture change, entry criteria, exit metrics, and what it must not build.
 
-Stage letters are names, not order. The planned order is A, B (with B1 after Phase 3 of `docs/plan.md`), E, E1, C, D, E2, F, G. A stage starts only when its entry criteria hold.
+Stage letters are names, not order. The planned order is A, B without deployment (Phases 3 to 5 of `docs/plan.md`), B1 (Phase 6), E (Phase 7), the deployment that closes B (Phase 8), then E1, C, D, E2, F, G. Nothing is deployed to Google Cloud before Phase 8, so B1 and E are built and gated on simulated play, and their real-player metrics are measured after the deployment. A stage starts only when its entry criteria hold.
 
 ### A. Foundation (done)
 
 FastAPI, PostgreSQL with pgvector, the LiteLLM wrapper with cost logging, record and replay, and CI. These are Phases 0–2 of `docs/plan.md`.
 
-### B. MVP game loop (in progress: `docs/plan.md`)
+### B. MVP game loop (in progress: `docs/plan.md` Phases 3 to 5, then Phase 8)
 
 - **Delivers:**
   - the case schema and the clingo proof,
@@ -334,7 +334,7 @@ FastAPI, PostgreSQL with pgvector, the LiteLLM wrapper with cost logging, record
   - case generation,
   - the detective bot,
   - the security and quality evals,
-  - deployment to Cloud Run with an operator-approved production release.
+  - deployment to Cloud Run with an operator-approved production release, in Phase 8, after B1 and E.
 - **Security delivered:**
   - Truth and Knowledge ACLs,
   - authorized retrieval and permitted claims,
@@ -356,8 +356,12 @@ FastAPI, PostgreSQL with pgvector, the LiteLLM wrapper with cost logging, record
   - Vane's accusation when one candidate remains; a player who loses the race still finishes the case,
   - a debrief that puts Vane's route next to the player's, and a result card line such as "4 steps ahead of Vane".
 - **Architecture change.** None. `belief` is a pure module in `backend/engine/`. Vane is a registered agent in `agents/registry.py` with the player layer only. When P5-1's `DetectiveBot` lands, it can use `belief` as a deterministic baseline strategy beside its `STRONG` model strategy.
-- **Entry criteria.** Phase 3 of `docs/plan.md` is done: authorization, the Tool Broker, the outbox, `state_version`, and the browser game. B1 may start before the rest of stage B. It becomes its own phase in `docs/plan.md` when it starts.
-- **Exit metrics,** measured once the MVP has real players:
+- **Entry criteria.** Phase 5 of `docs/plan.md` is done, which includes Phase 3's authorization, Tool Broker, outbox, `state_version`, and browser game. B1 is Phase 6 of `docs/plan.md`.
+- **Gate before deployment,** in Phase 6, on simulated play that calls no model:
+  - `belief` alone converges on the culprit in every hand-written case,
+  - `make rival-sim` win shares fall inside the tier bands of `docs/plan.md` Open decision 9,
+  - Vane reads the Truth 0 times, proven by the agent inventory.
+- **Exit metrics,** measured once the game is deployed and has real players:
   - completion rate and D7 with Vane, against a control group without Vane,
   - novice-tier completion no lower than the control; if it is lower, retune the step rate, and if it is still lower, make Vane optional,
   - Vane reads the Truth 0 times, proven by the agent inventory.
@@ -424,10 +428,14 @@ FastAPI, PostgreSQL with pgvector, the LiteLLM wrapper with cost logging, record
   - Start in-process with LangGraph and `belief`. Models only phrase the detectives' lines and extract claims from the player's answers.
   - Add Google ADK and A2A when a measured gain from the multi-agent split shows.
   - Evaluate AX and Agent Substrate under §6.4.
-- **Entry criteria.** Stage B is done and the MVP has real players. B1's `belief` engine has met its exit metrics. This replaces the earlier criterion of stage D exit, so killer mode tests whether players want an AI that hunts them before the daily growth work.
-- **Exit metrics.**
-  - Detective win rate inside the target band at each difficulty.
-  - Brier score below the threshold set from pilot data.
+- **Entry criteria.** The Phase 6 gate of `docs/plan.md` holds: B1's `belief` engine and Vane passed their gate on simulated play. E is Phase 7 of `docs/plan.md`, before the first deployment. This replaces the earlier criteria of real MVP players and stage D exit, so killer mode is in the game before it first deploys.
+- **Gate before deployment,** in Phase 7, on simulated play that calls no model:
+  - detective win rate inside the band of `docs/plan.md` Open decision 11 at each difficulty,
+  - Brier score below the threshold of `docs/plan.md` Open decision 12,
+  - detectives read the Truth 0 times.
+- **Exit metrics,** measured once the game is deployed and has real players:
+  - Detective win rate inside the target band at each difficulty, against real players.
+  - Brier score below the threshold, recalibrated from real games.
   - Session length, and the share of players who start another game right after being caught, against detective mode.
   - Detectives read the Truth 0 times, proven by the agent inventory and the eval runner.
 - **Must not:** let a detective read the solution oracle, or accuse without the conflicts and clues it cites.

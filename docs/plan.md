@@ -1,6 +1,6 @@
 # Mendacia MVP plan
 
-This plan takes Mendacia from the merged Phase 2 game loop to a playable, security-gated MVP running on Google Cloud. It covers 20 stacked PRs in 7 phases. Phases 0 to 2 (7 PRs) are merged; this plan adds 13 PRs in Phases 3 to 6. Players can play in the terminal now, in the browser after Phase 3, and on a staging URL after P6-1. Production goes live only when the operator approves the release.
+This plan takes Mendacia from the merged Phase 2 game loop to a playable, security-gated game with a rival detective and killer mode, then puts it on Google Cloud. It covers 26 stacked PRs in 9 phases. Phases 0 to 2 (7 PRs) are merged; this plan adds 19 PRs in Phases 3 to 8. Players can play in the terminal now, in the browser after Phase 3, against a rival detective after Phase 6, as the killer after Phase 7, and on a staging URL after P8-1. Nothing is deployed to Google Cloud before Phase 8. Production goes live only when the operator approves the release.
 
 The program enforces three rules:
 
@@ -8,12 +8,12 @@ The program enforces three rules:
 2. Suspects lie only with the case's `planned_lies`.
 3. No fact, document, or tool reaches a model or a player without a server-side authorization decision.
 
-PR ids in order are P0-1, P0-2, P1-1, P1-2, P2-1, P2-2, P2-3, P3-1, P3-2, P3-3, P3-4, P3-5, P3-6, P4-1, P4-2, P5-1, P5-2, P6-1, P6-2, P6-3. Each open PR runs in its own Claude Code cloud session on Linux. The operator lands every PR and releases every production deploy.
+PR ids in order are P0-1, P0-2, P1-1, P1-2, P2-1, P2-2, P2-3, P3-1, P3-2, P3-3, P3-4, P3-5, P3-6, P4-1, P4-2, P5-1, P5-2, P6-1, P6-2, P7-1, P7-2, P7-3, P7-4, P8-1, P8-2, P8-3. Each open PR runs in its own Claude Code cloud session on Linux. The operator lands every PR and releases every production deploy.
 
 Read these first:
 
 - `docs/spec.md` says what each piece does. This plan says when each piece lands and how it is verified.
-- `docs/roadmap.md` holds everything after the MVP. Do not build from it unless a phase below says so.
+- `docs/roadmap.md` holds everything after the MVP. Do not build from it unless a phase below says so. Phases 6 and 7 build roadmap stages B1 and E.
 - Project rules are in `CLAUDE.md`.
 
 ## How to read this
@@ -36,8 +36,8 @@ The operator set live verification to two lanes per PR. Each PR has Lane 1, the 
   - [ ] A Claude Code cloud environment named `mendacia`. Its secrets hold one provider key per model, plus `MODEL_FAST`, `MODEL_STRONG`, `MODEL_EMBED`, `EMBED_DIM`, and `EVAL_MAX_USD`. Its network allowlist reaches PyPI, npm, the Ubuntu apt mirrors, GitHub, and each model provider host.
   - [ ] The embedding provider for `MODEL_EMBED`. Anthropic has no embedding model, so this needs a second provider key.
   - [ ] GitHub Actions secrets for the live-eval workflow in P5-2.
-  - [ ] Before P6-1: a GCP project with billing, the Workload Identity Federation pool and provider for this repository, a staging deploy service account, and a `production` GitHub Environment whose only required reviewer is the operator.
-- [ ] On the operator's go, write this exact text into the standing orders and restate it in your todolist. "Plan `docs/plan.md`. Spec `docs/spec.md`. PRs in order P3-1, P3-2, P3-3, P3-4, P3-5, P3-6, P4-1, P4-2, P5-1, P5-2, P6-1, P6-2, P6-3. Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Live verification is two lanes per PR. Owners stop at STACK-READY. The operator lands every PR and approves every production deploy. A phase starts only after the operator lands the previous phase and finishes its checkpoint. Done when P6-3 is landed, staging passes a live game, and the operator has released production."
+  - [ ] Before P8-1: a GCP project with billing, the Workload Identity Federation pool and provider for this repository, a staging deploy service account, and a `production` GitHub Environment whose only required reviewer is the operator.
+- [ ] On the operator's go, write this exact text into the standing orders and restate it in your todolist. "Plan `docs/plan.md`. Spec `docs/spec.md`. PRs in order P3-1, P3-2, P3-3, P3-4, P3-5, P3-6, P4-1, P4-2, P5-1, P5-2, P6-1, P6-2, P7-1, P7-2, P7-3, P7-4, P8-1, P8-2, P8-3. Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Live verification is two lanes per PR. Owners stop at STACK-READY. The operator lands every PR and approves every production deploy. A phase starts only after the operator lands the previous phase and finishes its checkpoint. Done when P8-3 is landed, staging passes a live game, and the operator has released production."
 - [ ] Read these from the installed plugin at program start. Re-read them at every tick.
   - [ ] `skills/poteto-mode/playbooks/autopilot-stack.md`
   - [ ] `skills/poteto-mode/playbooks/autopilot-full.md`
@@ -57,12 +57,15 @@ The operator set live verification to two lanes per PR. Each PR has Lane 1, the 
   - [ ] P3-1 is first. It branches from `main` as `phase-3/instruction-guard`. P3-2 after P3-1. P3-3 after P3-2. P3-4 after P3-3. P3-5 after P3-4. P3-6 after P3-5. Then the Phase 3 checkpoint.
   - [ ] P4-1 after the Phase 3 checkpoint. P4-2 after P4-1. Then the Phase 4 gate.
   - [ ] P5-1 after the Phase 4 gate. P5-2 after P5-1. Then the Phase 5 checkpoint.
-  - [ ] P6-1 after the Phase 5 checkpoint. P6-2 after P6-1. P6-3 after P6-2. Then the production release.
+  - [ ] P6-1 after the Phase 5 checkpoint. P6-2 after P6-1. Then the Phase 6 gate.
+  - [ ] P7-1 after the Phase 6 gate. P7-2 after P7-1. P7-3 after P7-2. P7-4 after P7-3. Then the Phase 7 checkpoint.
+  - [ ] P8-1 after the Phase 7 checkpoint. P8-2 after P8-1. P8-3 after P8-2. Then the production release.
 - [ ] Hold the phase gates. A gate opens only when the operator has landed every PR of the phase and every acceptance command of that phase passes on `main`.
 - [ ] Hold the operator checkpoints. The next phase waits for the operator's go in chat.
   - [ ] After Phase 3, the operator reads the policy table in ADR 007, the Tool Broker registry in ADR 010, and the agent manifests.
   - [ ] After Phase 5, the operator reads the metric definitions (ADR 013) and the first security report.
-  - [ ] After P6-3, the operator reads the runbook and approves the production deploy.
+  - [ ] After Phase 7, the operator plays killer mode at each difficulty and decides whether the game is ready to deploy.
+  - [ ] After P8-3, the operator reads the runbook and approves the production deploy.
 - [ ] Hold the file boundaries.
   - [ ] P3-1 touches only `scripts/`, `.github/`, `Makefile`, `backend/pyproject.toml`, `backend/tests/`, and `docs/adr/`.
   - [ ] P3-2 touches only `backend/security/`, `backend/agents/`, `backend/app/llm.py`, `backend/migrations/`, `backend/tests/`, `docs/adr/`, and `Makefile`.
@@ -70,9 +73,12 @@ The operator set live verification to two lanes per PR. Each PR has Lane 1, the 
   - [ ] P3-4 adds `backend/evidence/` and `backend/evals/`, and touches `backend/migrations/`, `backend/tests/`, `docs/adr/`, and `Makefile`.
   - [ ] P3-5 touches `backend/app/`, `backend/security/`, `backend/agents/`, `backend/migrations/`, `backend/tests/`, `docs/adr/`, and `Makefile`.
   - [ ] P3-6 adds `frontend/` and `.claude/skills/verify/`, and touches `docker-compose.yml`, `Makefile`, and `.github/workflows/ci.yml`.
-  - [ ] Phase 6 PRs add `infra/`, `frontend/Dockerfile`, and `.github/workflows/deploy*.yml`, and touch `backend/Dockerfile`, `backend/app/` (telemetry only), `README.md`, and `docs/`.
+  - [ ] Phase 6 PRs add `backend/engine/belief.py` and the rival detective, and touch `backend/engine/`, `backend/agents/`, `backend/app/`, `backend/migrations/`, `backend/tests/`, `frontend/`, `docs/adr/`, `docs/spec.md`, and `Makefile`.
+  - [ ] Phase 7 PRs add killer mode, and touch `cases/`, `backend/engine/`, `backend/agents/`, `backend/app/`, `backend/sim/`, `backend/evals/`, `backend/migrations/`, `backend/tests/`, `frontend/`, `docs/adr/`, `docs/spec.md`, and `Makefile`.
+  - [ ] No PR before Phase 8 adds `infra/`, a deploy workflow, or anything that needs a GCP credential. Phases 3 to 7 run locally and in CI only.
+  - [ ] Phase 8 PRs add `infra/`, `frontend/Dockerfile`, and `.github/workflows/deploy*.yml`, and touch `backend/Dockerfile`, `backend/app/` (telemetry only), `README.md`, and `docs/`.
   - [ ] Any PR that changes the `Case` schema updates the hand-written cases, the solver, the tests, and `docs/spec.md`, and adds an ADR, all in the same PR.
-- [ ] Hold the review gate. P3-6, P4-2, and P6-1 change something a player sees. They wait for the operator's review in chat with screenshots and a video before merge.
+- [ ] Hold the review gate. P3-6, P4-2, P6-2, P7-4, and P8-1 change something a player sees. They wait for the operator's review in chat with screenshots and a video before merge.
 - [ ] Hold the stop conditions. An owner writes the item to `docs/QUESTIONS.md` (creating it if needed), pushes, reports it, and stops when:
   - a rule cannot be expressed in ASP,
   - a run may exceed `EVAL_MAX_USD`,
@@ -88,7 +94,7 @@ The operator set live verification to two lanes per PR. Each PR has Lane 1, the 
 - [ ] List every acceptance command of the PR with its output in the PR description, per the operator's plan rules.
 - [ ] Run `make lint typecheck` once before the PR-facing push. Push with hooks on.
 - [ ] Run `/deslop` before each commit and `/no-comments` before review.
-- [ ] Run the **architect** skill before writing code in P3-2, P3-4, P3-5, P4-1, and P6-1. Run the **interrogate** skill before code-ready in the same PRs.
+- [ ] Run the **architect** skill before writing code in P3-2, P3-4, P3-5, P4-1, P6-1, P7-1, P7-3, and P8-1. Run the **interrogate** skill before code-ready in the same PRs.
 - [ ] Triage every review-bot and security-reviewer comment per `../references/bugbot-triage.md`.
 - [ ] Before the code-ready report and babysit, and again after merge prep, record the base and head SHAs prepared by the topology owner under the execution playbook.
 - [ ] Keep `make ci` free of real model calls. Tests that call models carry `@pytest.mark.live` and run only with `pytest -m live`.
@@ -119,7 +125,7 @@ Each live lane runs in its own worktree at the PR head. Drive it through the ski
 - [ ] Deliver input only through the driver skill's commands. The CLI and the backend go through the `run` skill. The browser goes through `.claude/skills/verify/SKILL.md` once P3-6 creates it, which runs Playwright. Read-only diagnostics are `psql "$DATABASE_URL" -c '<select>'` on `llm_calls`, `verifier_events`, `security_events`, and `generation_log`, and the backend log.
 - [ ] From P3-1 on, Lane 1 also runs `make scan-instructions` at head. From P3-2 on, it also runs `make security-regress` at trunk and head. A regression in either fails Lane 1.
 - [ ] Before a lane that calls real models, set `LLM_MODE=live` and `LANE_MAX_USD=1`. After the lane, sum `cost_usd` in `llm_calls`. The lane fails if the sum exceeds `LANE_MAX_USD`, except the eval lane in P5-2, which uses `EVAL_MAX_USD`.
-- [ ] A staging lane (P6-1, P6-2) deploys only through `deploy.yml` with `workflow_dispatch` and `ref=<head SHA>`. It never touches the `production` environment.
+- [ ] A staging lane (P8-1, P8-2) deploys only through `deploy.yml` with `workflow_dispatch` and `ref=<head SHA>`. It never touches the `production` environment.
 - [ ] For a perf probe, run the probe at trunk, head, trunk, head, trunk, head and take the median of each side.
 - [ ] Save every screenshot to `/tmp/swarm-<pr-id>/worker-<n>/<slug>.png` and return the paths with the report. A terminal lane saves its transcript as `<slug>.txt` beside the screenshots.
 
@@ -793,9 +799,291 @@ Gaps Phase 3 closes:
 - [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
 - [ ] The root appends P5-2 to the base-branch stack and the operator lands it bottom-up.
 
-## Deploy to Google Cloud staging (P6-1)
+## Build the belief engine (P6-1)
 
-**Depends on.** P5-2 and the Phase 5 checkpoint. The GCP operator items in **Arm the program** exist.
+Phase 6 builds roadmap stage B1. Phase 7 builds roadmap stage E. Both run locally and in CI only. Their simulated players call no model, so their gates cost nothing.
+
+**Depends on.** P5-2 and the Phase 5 checkpoint.
+
+**Files.**
+
+- [ ] Create `backend/engine/belief.py`, runnable as `python -m engine.belief`.
+- [ ] Create `backend/tests/engine/test_belief.py`.
+- [ ] Edit `backend/agents/registry.py` to register `belief` with the player layer only.
+- [ ] Edit `docs/adr/016-proactive-agents-within-planned-bounds.md` to set its status to Accepted, and `docs/spec.md` with a `belief` section.
+
+**Build.**
+
+- [ ] Add `belief(case_public, found) -> Belief` in `engine/belief.py`, as ADR 016 describes. It is pure and calls no model. Its input is the public case view and the facts one agent has found, never the Truth layer. It returns:
+  - [ ] `candidates`: the culprits still possible, each with its number of models;
+  - [ ] `best_query`: among the questions the agent can ask, the one whose possible answers split the candidates most evenly, from a solve projected on the culprit and the query's answer;
+  - [ ] `conflicts`: claims that have no model together with the pinned facts.
+- [ ] Break ties on a seed derived from `case_version`, so the same facts give the same choice for every player.
+- [ ] Add `python -m engine.belief --case <path> --trace`. It plays the case alone: it asks `best_query`, gets the answer from the game engine the way a player would, and prints one line per step with the candidates left, until one remains.
+
+**You see.**
+
+- [ ] `uv run python -m engine.belief --case cases/manor.json --trace` ends with `1 candidate left: clara` and prints the step count.
+
+**Verify, unit.**
+
+- [ ] `test_belief.py` plays each hand-written case to one candidate, the culprit, within the case's question budget.
+- [ ] It asserts that a planned lie, entered as a claim, shows up in `conflicts` once the clue that exposes it is pinned.
+- [ ] It asserts the same `case_version` and facts give the same `best_query`, and a different `case_version` may not.
+- [ ] It asserts through the agent inventory that `belief` is granted the player layer only and never reads `culprit`, `secrets`, or `solution_chain`. Run `make test`.
+
+**Verify, live.**
+
+- [ ] Lane 1. Regression lane against trunk. Run `make ci` at trunk and head. Save `regression.txt`. Pass when both sides pass.
+- [ ] Lane 2. Run `python -m engine.belief --trace` on the 3 hand-written cases and on every case in `cases/generated/`. No model is called. Save `belief-trace.txt`. Pass when every case ends with the true culprit as the only candidate.
+
+**Verify, perf.**
+
+- [ ] Metric. Wall time of one `belief` step, and `make ci`.
+- [ ] Probe. Time every step in Lane 2 and take the p95. Run `make ci` interleaved at trunk and head per the boot recipe.
+- [ ] Rule. Fail when one step's p95 exceeds 1 s, or when the head `make ci` median exceeds trunk by more than 30 s.
+
+**Review gate.** None.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Bugbot triage done.
+- [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
+- [ ] The root appends P6-1 to the base-branch stack and the operator lands it bottom-up.
+
+## Race Inspector Vane in the daily case (P6-2)
+
+**Depends on.** P6-1.
+
+**Files.**
+
+- [ ] Create `backend/agents/rival.py` and edit `backend/agents/registry.py`.
+- [ ] Edit `backend/app/` for the rival's progress on the game view and the WebSocket, and `backend/migrations/` for the rival's state per game.
+- [ ] Create `frontend/src/components/RivalTrack.tsx` and edit the game and debrief screens.
+- [ ] Create `backend/sim/rival_sim.py`, `frontend/e2e/rival.spec.ts`, and the tests under `backend/tests/`.
+- [ ] Edit `docs/spec.md` and `Makefile`.
+
+**Build.**
+
+- [ ] Add Inspector Vane, a rival who works the same case. Vane takes one `belief` step every N player questions. A player action commits an outbox row, and a trigger rule that calls no model wakes Vane. Vane never runs on a timer.
+- [ ] Add three difficulty tiers. A tier sets N and a seeded choice among the top k queries. The defaults are in Open decision 10.
+- [ ] Show the rival track in the UI. Before the reveal it shows only how many suspects Vane still suspects, never which ones, and never a fact or a document the player has not found.
+- [ ] Vane accuses when one candidate remains. A player who loses the race still finishes the case.
+- [ ] Any line Vane says runs the nine-step turn and is released only after verification. Each game has a wake budget and a token budget.
+- [ ] The debrief puts Vane's route next to the player's and adds a result line such as `4 steps ahead of Vane`.
+- [ ] Add `make rival-sim`. A simulated player that calls no model plays each hand-written case against Vane at each tier, many times with different seeds. It reports the share of games the player finishes before Vane per tier.
+
+**You see.**
+
+- [ ] The game screen shows `Vane suspects 3 of 4` and updates after the player's questions.
+- [ ] `make rival-sim` prints one line per tier with the player's win share.
+
+**Verify, unit.**
+
+- [ ] A replayed game in which Vane steps every N questions and accuses when one candidate remains, and the player still reaches the reveal. Run `make test`.
+- [ ] The no-spoiler check covers every rival event and the rival track text. Run `make test` and `cd frontend && npx playwright test rival`.
+- [ ] The agent inventory shows Vane with the player layer only, and an eval counts 0 Truth reads by Vane. Run `make test`.
+
+**Verify, live.**
+
+- [ ] Lane 1. Regression lane against trunk. Run the replayed `full-game.spec.ts` at trunk and head through `.claude/skills/verify/SKILL.md`. Save `e2e-regression.png`. Pass when both sides reach the reveal with `Correct`.
+- [ ] Lane 2. Play `cases/manor.json` in the browser at each tier against the live backend with `LLM_MODE=live` and `LANE_MAX_USD=1`. Then run `make rival-sim`. Save `rival-<tier>.png` and `rival-sim.txt`. Pass when the rival track never names a suspect before the reveal, each game reaches the reveal, and the tier win shares fall inside the bands of Open decision 9.
+
+**Verify, perf.**
+
+- [ ] Metric. Added turn latency from Vane's step, and `make ci`.
+- [ ] Probe. Time 10 replayed turns with Vane on and off, interleaved, and run `make ci` interleaved at trunk and head.
+- [ ] Rule. Fail when Vane adds more than 300 ms to the turn median, or when the head `make ci` median exceeds trunk by more than 30 s.
+
+**Review gate.** The operator reviews before merge.
+
+- [ ] Record a 30 to 60 second video of a race against Vane with Playwright `recordVideo`. Save it and the Lane 2 screenshots under `docs/media/p6-2/`.
+- [ ] Post them in chat for the operator. Stop at merge-ready. Wait for the operator's click.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Bugbot triage done.
+- [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
+- [ ] The root appends P6-2 to the base-branch stack and the operator lands it bottom-up. Then the Phase 6 gate: every acceptance command of P6-1 and P6-2 passes on `main`.
+
+## Define killer-mode cases (P7-1)
+
+**Depends on.** The Phase 6 gate.
+
+**Files.**
+
+- [ ] Edit `backend/engine/schema.py`, `backend/engine/check.py`, and `backend/engine/rules.lp` as the ADR decides.
+- [ ] Add at least 2 hand-written killer-mode cases under `cases/`.
+- [ ] Edit `backend/engine/generator.py` so `make case` can produce a killer-mode case.
+- [ ] Create `docs/adr/017-killer-mode-cases.md`. Edit `docs/spec.md`.
+
+**Build.**
+
+- [ ] Decide in ADR 017 how a case marks killer mode, and what the player, as the culprit, is shown: the true timeline, the clues that could expose them, and nothing a detective has not earned.
+- [ ] If the `Case` schema changes, update every hand-written case, the solver, and the tests in this PR, per `CLAUDE.md`.
+- [ ] Every killer-mode case passes every `check_case` check, so the detectives can always solve it with enough actions.
+
+**You see.**
+
+- [ ] `make check-case CASE=cases/<killer case>.json` prints every check as `PASS`.
+
+**Verify, unit.**
+
+- [ ] Each hand-written killer-mode case passes `check-case` and `lint-evidence`. The detective-mode cases still pass unchanged. Run `make test`, `make validate-cases`, and `make lint-evidence`.
+- [ ] A replayed generation produces a killer-mode case that passes. Run `make test`.
+
+**Verify, live.**
+
+- [ ] Lane 1. Regression lane against trunk. Run `make check-case` on the 3 detective-mode cases and the replayed `full-game.spec.ts` at trunk and head. Save `regression.txt`. Pass when the solver output and the e2e result match.
+- [ ] Lane 2. Run `python -m engine.belief --trace` on each killer-mode case, as the detectives would see it with no player lies. Save `killer-belief.txt`. Pass when every case converges on the player's character.
+
+**Verify, perf.** `make ci` at trunk and head. Fail when the head median exceeds trunk by more than 30 s.
+
+**Review gate.** None.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Bugbot triage done.
+- [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
+- [ ] The root appends P7-1 to the base-branch stack and the operator lands it bottom-up.
+
+## Turn the killer's answers into claims and find contradictions (P7-2)
+
+**Depends on.** P7-1.
+
+**Files.**
+
+- [ ] Create `backend/agents/killer_claims.py` and edit `backend/agents/registry.py`.
+- [ ] Create the tests under `backend/tests/agents/`, with recordings under `backend/tests/fixtures/llm/`.
+- [ ] Edit `docs/spec.md`.
+
+**Build.**
+
+- [ ] Extract the player's free-text answers into claims with `ModelRole.FAST` and the structured claim schema the verifier uses. The player's text is untrusted. It never reaches a prompt as an instruction, and it passes `screen_input` first.
+- [ ] A claim that has no model together with the facts the detectives pinned is a conflict. `belief` decides this, not a model.
+- [ ] Keep each conflict with the claim, the pinned facts, and the clues that pinned them, so a detective can quote the evidence and the debrief can show it.
+
+**You see.**
+
+- [ ] A replayed answer `I was home all evening` against a pinned car log prints one conflict that names the claim and the clue.
+
+**Verify, unit.**
+
+- [ ] Replayed extractions of a consistent alibi (no conflict), a lie a clue exposes (one conflict), and an injection attempt in an answer (screened, no claim). Run `make test`.
+- [ ] An extraction that misses a claim never creates a conflict from nothing. Run `make test`.
+
+**Verify, live.**
+
+- [ ] Lane 1. Regression lane against trunk. Run `make ci` at trunk and head. Pass when both pass.
+- [ ] Lane 2. With `LLM_MODE=live` and `LANE_MAX_USD=1`, extract 20 scripted killer answers on the hand-written killer cases. Save `claims.txt`. Pass when every expected conflict is found and no consistent answer produces one.
+
+**Verify, perf.** Extraction latency p95 under 3 s in Lane 2. `make ci` head median within 30 s of trunk.
+
+**Review gate.** None.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Bugbot triage done.
+- [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
+- [ ] The root appends P7-2 to the base-branch stack and the operator lands it bottom-up.
+
+## Send the detective team after the killer (P7-3)
+
+**Depends on.** P7-2.
+
+**Files.**
+
+- [ ] Create `backend/agents/detective_team.py` and edit `backend/agents/registry.py`.
+- [ ] Edit `backend/app/` for the killer-mode game, the action budget, and the confrontation events. Edit `backend/migrations/`.
+- [ ] Create the tests under `backend/tests/`, and `docs/adr/018-killer-mode-detectives.md`. Edit `docs/spec.md`.
+
+**Build.**
+
+- [ ] Give each game an action budget, 12 by default (Open decision 11). An action reads a document, questions a character, or asks the player.
+- [ ] The team chooses each action with `belief`. Models only phrase the detectives' lines.
+- [ ] On a conflict, the next detective action confronts the player and quotes the evidence.
+- [ ] The team accuses when one candidate remains and the cited clues prove it. The player wins when the budget runs out first.
+- [ ] Grant tools per investigation stage, least privilege. Give every agent an identity and authenticate messages between agents through `authorize`.
+- [ ] Every detective line runs the nine-step turn and is released only after verification. Each game has a wake budget and a token budget, and a circuit breaker stops proactive turns when either runs out.
+
+**You see.**
+
+- [ ] A replayed killer-mode game in the terminal shows each detective action, a confrontation that quotes a clue, and the ruling.
+
+**Verify, unit.**
+
+- [ ] A replayed game the detectives win by accusing with cited clues, and one the player wins when the budget runs out. Run `make test`.
+- [ ] The agent inventory shows each detective with the player layer only, and an eval counts 0 Truth reads. A detective never accuses without the conflicts and clues it cites. Run `make test`.
+
+**Verify, live.**
+
+- [ ] Lane 1. Regression lane against trunk. Run the replayed `full-game.spec.ts` at trunk and head. Pass when both reach the reveal with `Correct`.
+- [ ] Lane 2. With `LLM_MODE=live` and `LANE_MAX_USD=1`, play one killer-mode case twice in the terminal: once telling the truth, once lying consistently. Save `killer-live.txt`. Pass when the truthful game is caught, every confrontation quotes a real clue, and the cost stays under `LANE_MAX_USD`.
+
+**Verify, perf.** A detective action's p95 latency under 8 s in Lane 2. `make ci` head median within 30 s of trunk.
+
+**Review gate.** None.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Bugbot triage done.
+- [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
+- [ ] The root appends P7-3 to the base-branch stack and the operator lands it bottom-up.
+
+## Play killer mode in the browser and gate it on simulation (P7-4)
+
+**Depends on.** P7-3.
+
+**Files.**
+
+- [ ] Create the killer-mode screens under `frontend/src/` and `frontend/e2e/killer.spec.ts`.
+- [ ] Create `backend/sim/killer_sim.py` and its tests. Edit `Makefile` and `docs/spec.md`.
+
+**Build.**
+
+- [ ] Add killer mode to the browser: the case picker offers it, the player sees their true timeline, answers the detectives, and watches the action budget.
+- [ ] Add the debrief. It lists each conflict the detectives found and the step where suspicion moved.
+- [ ] Add difficulty tiers set by the action budget and the team's choice rule.
+- [ ] Add `make killer-sim`. Simulated killers at several skill tiers give scripted structured claims, so no model is called. It reports the detective win rate per difficulty and the Brier score of the detectives' suspicion.
+- [ ] Add the simulation gate: a killer-mode case is playable only when `make killer-sim` puts it inside the bands of Open decision 11 and under the Brier threshold of Open decision 12.
+
+**You see.**
+
+- [ ] The browser plays a killer-mode case to a ruling at each difficulty.
+- [ ] `make killer-sim` prints one line per difficulty with the detective win rate and the Brier score.
+
+**Verify, unit.**
+
+- [ ] `frontend/e2e/killer.spec.ts` plays a replayed killer-mode game to each ruling and runs the no-spoiler check. Run `cd frontend && npx playwright test killer`.
+- [ ] `killer_sim.py` tests assert the win rate and Brier score on seeded runs. Run `make test`.
+
+**Verify, live.**
+
+- [ ] Lane 1. Regression lane against trunk. Run the replayed `full-game.spec.ts` and `rival.spec.ts` at trunk and head. Save `e2e-regression.png`. Pass when both sides reach the reveal.
+- [ ] Lane 2. With `LLM_MODE=live` and `LANE_MAX_USD=1`, play one killer-mode case in the browser at each difficulty, then run `make killer-sim`. Save `killer-<difficulty>.png` and `killer-sim.txt`. Pass when each game reaches a ruling, the debrief lists the conflicts, and the simulation gate passes.
+
+**Verify, perf.** A detective action's p95 latency under 8 s in Lane 2. The head e2e median within 10 s of trunk.
+
+**Review gate.** The operator reviews before merge.
+
+- [ ] Record a 30 to 60 second video of a killer-mode game with Playwright `recordVideo`. Save it and the Lane 2 screenshots under `docs/media/p7-4/`.
+- [ ] Post them in chat for the operator. Stop at merge-ready. Wait for the operator's click.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Bugbot triage done.
+- [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
+- [ ] The root appends P7-4 to the base-branch stack and the operator lands it bottom-up. Then the Phase 7 checkpoint: the operator plays killer mode at each difficulty and gives the go for Phase 8.
+
+## Deploy to Google Cloud staging (P8-1)
+
+**Depends on.** P7-4 and the Phase 7 checkpoint. The GCP operator items in **Arm the program** exist.
 
 **Files.**
 
@@ -858,11 +1146,11 @@ Gaps Phase 3 closes:
 - [ ] Root's clean verdict at the exact head SHA.
 - [ ] Bugbot triage done.
 - [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
-- [ ] The root appends P6-1 to the base-branch stack and the operator lands it bottom-up.
+- [ ] The root appends P8-1 to the base-branch stack and the operator lands it bottom-up.
 
-## Prepare the production release and observability (P6-2)
+## Prepare the production release and observability (P8-2)
 
-**Depends on.** P6-1.
+**Depends on.** P8-1.
 
 **Files.**
 
@@ -917,11 +1205,11 @@ Gaps Phase 3 closes:
 - [ ] Root's clean verdict at the exact head SHA.
 - [ ] Bugbot triage done.
 - [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
-- [ ] The root appends P6-2 to the base-branch stack and the operator lands it bottom-up.
+- [ ] The root appends P8-2 to the base-branch stack and the operator lands it bottom-up.
 
-## Document the project so anyone can run, deploy, and demo it (P6-3)
+## Document the project so anyone can run, deploy, and demo it (P8-3)
 
-**Depends on.** P6-2.
+**Depends on.** P8-2.
 
 **Files.**
 
@@ -972,7 +1260,7 @@ Gaps Phase 3 closes:
 - [ ] Root's clean verdict at the exact head SHA.
 - [ ] Bugbot triage done.
 - [ ] Base and verdict are current under the execution playbook and the patch-id rule in `playbooks/shipping.md`.
-- [ ] The root appends P6-3 to the base-branch stack and the operator lands it bottom-up.
+- [ ] The root appends P8-3 to the base-branch stack and the operator lands it bottom-up.
 
 ## Close the program
 
@@ -993,9 +1281,14 @@ Each decision names the PR that needs the answer. An owner who reaches that PR w
 | 3 | Question accounting: do hostile but valid follow-ups, clarifications, retries, and failed model turns cost a question? | P3-5 | Only a released verified reply costs one |
 | 4 | Output streaming: which replies may stream after per-sentence verification, and which must be verified whole first? | P3-5 | Every reply is verified whole, then chunked |
 | 5 | Anti-spoiler: before the reveal, may the UI show evidence counts, hint rankings, or personal hidden stats? | P3-6 | Only questions and hints left and discovered clues |
-| 6 | Retention: how long are raw messages, replay artifacts, and logs kept, who may read them, and how are they deleted? This depends on the serving region. | P6-2 | 30 days for raw messages, 90 days for structured events |
+| 6 | Retention: how long are raw messages, replay artifacts, and logs kept, who may read them, and how are they deleted? This depends on the serving region. | P8-2 | 30 days for raw messages, 90 days for structured events |
 | 7 | Daily publishing time zone and the replay deadline. | Roadmap stage D | Not in the MVP |
-| 8 | Monthly sustainable model cost per free player, and rate limits for costly play. | P6-2 | The P3-5 abuse budget, plus a staging budget alert |
+| 8 | Monthly sustainable model cost per free player, and rate limits for costly play. | P8-2 | The P3-5 abuse budget, plus a staging budget alert |
+| 9 | Vane's tier bands: the share of `make rival-sim` games the simulated player should finish before Vane at each tier. | P6-2 | Novice 70 percent or more, standard 40 to 60 percent, expert 30 percent or less |
+| 10 | Vane's step rate and top-k choice per tier. | P6-2 | One step every 4, 3, and 2 questions; top 3, 2, and 1 queries |
+| 11 | Killer mode's action budget and the detective win-rate band per difficulty in `make killer-sim`. | P7-3 | 12 actions; detectives win 30, 50, and 70 percent, each within 10 points |
+| 12 | The Brier threshold for the detectives' suspicion in the simulation gate. | P7-4 | 0.25 |
+| 13 | How the killer answers the detectives: free text, structured choices, or both. | P7-2 | Free text extracted to claims; structured choices wait for roadmap stage E2 |
 
 ## Appendix A. Prototype evidence
 
@@ -1087,7 +1380,7 @@ Run with `clingo.Control(["0", "--project"])` and `#show culprit/1.` to enumerat
 | S3 safe tool execution | An agent cannot reach the database, Truth, or unknown tools | P3-5 (`ToolBroker`) |
 | S4 verified output | No unverified token leaves the server | P3-5 (verified release), P3-6 (`no-spoilers.spec.ts`) |
 | S5 security regression | Known attacks succeed 0 times; normal confrontations finish | P3-2 (`make security-regress`), P5-2 (corpus, gameplay set) |
-| S6 release and observability | Tests and releases reproduce; a failure never goes live | P5-2 (`make publish`), P6-2 (traces, alerts) |
+| S6 release and observability | Tests and releases reproduce; a failure never goes live | P5-2 (`make publish`), P8-2 (traces, alerts) |
 
 v2.1 ADR-S01 to S06 map to ADR 007, 010, 011, 009, 012, and 015.
 
@@ -1099,8 +1392,8 @@ v2.1 ADR-S01 to S06 map to ADR 007, 010, 011, 009, 012, and 015.
 | A skill scanner flagged Unicode steganography found by YARA | The invisible-Unicode rule for instruction files, cases, documents, and generated cases | P3-1, P3-3, P4-1 |
 | An agentic registry and agent scans that infer capabilities from code against an overreach threshold | Agent manifests and the `make agent-inventory` AST gate | P3-2 |
 | A policy restricted an agent to read-only tools; a delete call was blocked with a 403 | Tool Broker `read_only` and `side_effect` tags, no tools for suspects, structured reason codes | P3-5 |
-| An AI broker decision trace: auth method, identity resolved, policy evaluation, upstream call, each with its timing | `security_events.decision_trace`, Cloud Trace spans | P3-2, P6-2 |
-| AI decoys as high-fidelity signals | The per-case canary, the honeypot route, and alerts on both | P3-2, P3-5, P6-2 |
+| An AI broker decision trace: auth method, identity resolved, policy evaluation, upstream call, each with its timing | `security_events.decision_trace`, Cloud Trace spans | P3-2, P8-2 |
+| AI decoys as high-fidelity signals | The per-case canary, the honeypot route, and alerts on both | P3-2, P3-5, P8-2 |
 | A bug-bounty researcher header that auto-whitelisted traffic from SOC paging | No client input can bypass a guard; a test proves it | P3-5 |
 | Chained medium-severity CVEs; an operation with 0 detections that cost $486 | Chained-leak attacks in the corpus, the per-session abuse budget | P3-5, P5-2 |
 | Auto-remediation policies generated from red-team results | Failed attacks become regression cases and proposed patches; a human approves each | P5-2 |

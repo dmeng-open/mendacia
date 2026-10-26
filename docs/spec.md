@@ -283,8 +283,8 @@ Each case in the attack corpus is tagged with its class and an OWASP LLM Top 10 
 |---|---|---|---|
 | Local | Native PostgreSQL 16 + pgvector, or `make up` | `LLM_MODE=live` or `replay` | Developer |
 | CI | `pgvector/pgvector:pg16` service | `replay` only; `live` tests run only on `pytest -m live` | GitHub Actions |
-| Staging | Cloud SQL Postgres 16 with `vector` | live, capped by budget alerts | `deploy.yml` on merge to `main` (P6-1) |
-| Production | Cloud SQL Postgres 16 with `vector` | live | `deploy-prod.yml`, approved by the operator in the `production` GitHub Environment (P6-2). Agents never deploy to production. |
+| Staging | Cloud SQL Postgres 16 with `vector` | live, capped by budget alerts | `deploy.yml` on merge to `main` (P8-1) |
+| Production | Cloud SQL Postgres 16 with `vector` | live | `deploy-prod.yml`, approved by the operator in the `production` GitHub Environment (P8-2). Agents never deploy to production. |
 
 ### 9.2 Models and calls
 
@@ -303,9 +303,10 @@ Structured events are kept. Raw player messages and replay artifacts are kept fo
 
 ## 10. Not in the MVP
 
+The rival detective (roadmap stage B1) and killer mode with the AI detective team (stage E) are scheduled before the first deployment, as Phases 6 and 7 of `docs/plan.md`. Their rules move into this spec when those phases start.
+
 These belong to `docs/roadmap.md`:
 
-- Killer mode and the AI detective team
 - Story seasons and world canon
 - Accounts, profiles, and leaderboards
 - Share cards
