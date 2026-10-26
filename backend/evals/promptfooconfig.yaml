@@ -1,0 +1,18 @@
+# The P5-2 attack corpus and gameplay set, run by promptfoo against the game API.
+# Run it through `make eval`, which sets EVAL_RUN_ID, the budget, and PROMPTFOO_PYTHON to the
+# backend virtualenv. Each test is one entry of
+# evals/attacks/corpus.yaml or evals/gameplay_normal.yaml; the provider plays it over HTTP and
+# WS /games/{id}/ask and the assertion applies evals/attack_assert.py to the transcript.
+description: Mendacia attack corpus and gameplay set (P5-2)
+prompts:
+  - "{{entry}}"
+providers:
+  - id: file://promptfoo_hooks.py:call_api
+    label: mendacia-api
+tests: file://promptfoo_hooks.py:generate_tests
+defaultTest:
+  assert:
+    - type: python
+      value: file://promptfoo_hooks.py:get_assert
+evaluateOptions:
+  maxConcurrency: 1

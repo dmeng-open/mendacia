@@ -17,6 +17,7 @@ from app import llm
 from app.config import Settings
 from app.db import sync_engine
 from app.llm import LLM_CALLS, Tags
+from app.llm_replay import MissingRecording
 from app.main import create_app
 from engine.schema import Case
 from sim.detective_bot import DetectiveBot, Played
@@ -91,6 +92,7 @@ class GameResult:
     case_id: str
     game_id: str | None
     accused: str | None
+    named_culprit: bool
     solved: bool
     questions_used: int
     blocks: int
@@ -143,15 +145,16 @@ def _game_totals(game_id: str) -> tuple[int, float]:
 
 def _score(n: int, case_id: str, played: Played | None, stopped: str | None) -> GameResult:
     if played is None:
-        return GameResult(n, case_id, None, None, False, 0, 0, 0.0, stopped)
+        return GameResult(n, case_id, None, None, False, False, 0, 0, 0.0, stopped)
     blocks, cost = _game_totals(played.game_id)
-    solved = played.accused is not None and played.accused == culprit_name(case_id)
+    named = played.accused is not None and played.accused == culprit_name(case_id)
     return GameResult(
         n,
         case_id,
         played.game_id,
         played.accused,
-        solved,
+        named,
+        played.ruling == "correct",
         played.questions_used,
         blocks,
         cost,
@@ -178,6 +181,8 @@ def run_games(
             return _score(i + 1, case_id, player(c, case_id, budget), None)
         except BudgetExceeded:
             return _score(i + 1, case_id, None, "budget_exceeded")
+        except MissingRecording:
+            return _score(i + 1, case_id, None, "unrecorded")
 
     def run_all(c: TestClient) -> list[GameResult]:
         with metered(budget), ThreadPoolExecutor(max_workers=concurrency) as pool:
@@ -198,13 +203,16 @@ def render(result: RunResult) -> list[str]:
     lines = [
         f"game {g.n} {g.case_id:<12} "
         f"{'solved' if g.solved else 'unsolved':<9}"
-        f"accused={g.accused or '-'} questions={g.questions_used} blocks={g.blocks} "
+        f"accused={g.accused or '-'}{' (the culprit)' if g.named_culprit else ''} "
+        f"questions={g.questions_used} blocks={g.blocks} "
         f"cost=${g.cost_usd:.4f}{f' stopped={g.stopped}' if g.stopped else ''}"
         for g in result.games
     ]
     solved = sum(g.solved for g in result.games)
+    named = sum(g.named_culprit for g in result.games)
     lines.append(
         f"run {result.run_id}: {result.status}, {solved}/{len(result.games)} solved, "
+        f"{named}/{len(result.games)} named the culprit, "
         f"total ${result.cost_usd:.4f} of ${result.max_usd:g}"
     )
     return lines

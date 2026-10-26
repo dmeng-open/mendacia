@@ -223,7 +223,7 @@ Every mutating request on a game carries an `Idempotency-Key` header (each WebSo
 
 ## 8. Evals and release gates
 
-### 8.1 Metrics (Recall@10, MRR, and ACL leaks built in P3-4 as `make retrieval-eval`; the rest P5-2)
+### 8.1 Metrics (built: Recall@10, MRR, and ACL leaks in P3-4 as `make retrieval-eval`, the rest in P5-2 as `make eval`; definitions in ADR 013)
 
 | Metric | Definition |
 |---|---|
@@ -241,15 +241,15 @@ Every mutating request on a game carries an `Idempotency-Key` header (each WebSo
 | Guard latency | Time spent in `authorize`, the broker, and verification per turn |
 | Cost per game | `cost_usd` summed from `llm_calls`, split by model and purpose |
 
-Every zero target holds for the named attack corpus, not for the whole world. Thresholds without measured data start as budgets in the plan and get rewritten from baselines.
+`make eval N=<n>` writes these to `reports/eval.md` and `reports/eval.json` from `security_eval_runs`, `security_findings`, `games`, `turns`, `llm_calls`, `verifier_events`, `security_events`, `reports/retrieval.json`, and `reports/agent-inventory.json`, with a component by attack-class hold-rate heatmap and the agent inventory. Every zero target holds for the named attack corpus, not for the whole world. Thresholds without measured data start as budgets in the plan and get rewritten from baselines.
 
 ### 8.1.1 Simulated play (built, P5-1)
 
-`sim.detective_bot.DetectiveBot` plays one game through the same HTTP and WebSocket endpoints the browser uses, with its own session cookie. `MODEL_STRONG` picks each move from what a player can see, with the `detective` prompt. Suspects appear to it by name and clues by number, never by their per-game handles, so its prompts replay. It reads no case file and imports nothing from `engine`, and `make agent-inventory` enforces both. `sim.runner.run_games(n, concurrency, max_usd)` plays `n` games, and its scorer reads the case file to judge each accusation. A run's `Budget` admits a model call only while the run has room for it. It stops every game once the run's spend passes `max_usd`, at most one call past the cap, and reports `budget_exceeded`. `make sim N=<n> CONCURRENCY=<c>` prints one line per game with the result, questions used, verifier blocks, and cost, then the total.
+`sim.detective_bot.DetectiveBot` plays one game through the same HTTP and WebSocket endpoints the browser uses, with its own session cookie. `MODEL_STRONG` picks each move from what a player can see, with the `detective` prompt. Suspects appear to it by name and clues by number, never by their per-game handles, so its prompts replay. It reads no case file and imports nothing from `engine`, and `make agent-inventory` enforces both. `sim.runner.run_games(n, concurrency, max_usd)` plays `n` games. A game is solved when the server rules the accusation `Correct.`, which needs the right suspect and enough cited chain clues; the scorer also reads the case file to report whether the bot named the culprit. A run's `Budget` admits a model call only while the run has room for it. It stops every game once the run's spend passes `max_usd`, at most one call past the cap, and reports `budget_exceeded`. `make sim N=<n> CONCURRENCY=<c>` prints one line per game with the result, questions used, verifier blocks, and cost, then the total.
 
-### 8.2 Attack classes (P5-2)
+### 8.2 Attack classes (built, P5-2, ADR 012)
 
-Each case in the attack corpus is tagged with its class and an OWASP LLM Top 10 (2025) id.
+Each case in the attack corpus (`evals/attacks/corpus.yaml`, 44 attacks, 6 chained) is tagged with its class and an OWASP LLM Top 10 (2025) id. promptfoo plays each entry, and the 41 entries of `evals/gameplay_normal.yaml`, through the HTTP and WebSocket API. `evals/attack_assert.py` judges the claims the server released, which each turn now stores in its `verdict`, and the released text. A failed attack becomes a reproduction in `evals/attacks/regressions.yaml` and a proposed patch under `reports/proposals/` that a person reviews; nothing applies itself. Live runs happen only in `.github/workflows/live-eval.yml`, by hand with a spend cap or weekly under `EVAL_MAX_USD`.
 
 1. Direct prompt injection
 2. Indirect injection (in documents or submissions)
@@ -277,7 +277,7 @@ Each case in the attack corpus is tagged with its class and an OWASP LLM Top 10 
 - the canary leaks, or
 - normal confrontations are blocked so often that the first game cannot be finished.
 
-`make publish CASE=` (P5-2) enforces these gates. On failure it writes `blocked_with_reason` with a minimal reproduction and keeps the last verified case live.
+`make publish CASE=` (built, P5-2, ADR 012) enforces these gates and names each P0 blocker it finds. On failure it writes `blocked_with_reason` to `reports/publish/<case>.json` with the command that reproduces it, publishes nothing, and so keeps the last verified case live. A generated case is blocked until a person reviews it.
 
 ## 9. Operations
 

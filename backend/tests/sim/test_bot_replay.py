@@ -23,7 +23,8 @@ def test_a_replayed_bot_game_ends_in_an_accusation() -> None:
 
     (game,) = result.games
     assert result.status == "finished"
-    assert (game.accused, game.solved) == ("Clara Ashcombe", True)
+    assert (game.accused, game.named_culprit) == ("Clara Ashcombe", True)
+    assert not game.solved, "it cited no solution_chain clue, so the ruling is not proven"
     assert game.questions_used > 0
     assert game.cost_usd == pytest.approx(result.cost_usd)
     assert result.cost_usd > 0
