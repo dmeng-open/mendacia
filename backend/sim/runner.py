@@ -205,7 +205,7 @@ def render(result: RunResult) -> list[str]:
     solved = sum(g.solved for g in result.games)
     lines.append(
         f"run {result.run_id}: {result.status}, {solved}/{len(result.games)} solved, "
-        f"total ${result.cost_usd:.4f} of ${result.max_usd:.2f}"
+        f"total ${result.cost_usd:.4f} of ${result.max_usd:g}"
     )
     return lines
 
