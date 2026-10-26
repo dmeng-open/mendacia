@@ -83,3 +83,5 @@ The operator has also asked that no live model call run without their approval f
 1. Approve one 100-game run and raise `EVAL_MAX_USD` for it (about $25 to $30 in total).
 2. Shrink the baseline: for example `make eval N=20` (about $5 for the games plus the corpus), and commit that as `reports/baseline/` with N stated.
 3. Cut the per-game cost first, for example by running the detective bot on `MODEL_FAST`, then decide on N from a new 5-game measurement.
+
+Operator decision (2026-10-26): no paid testing for now. The live corpus run, `make eval N=5`, and `reports/baseline/` are deferred until the operator approves a specific run. Work continues with replay and offline checks only.
