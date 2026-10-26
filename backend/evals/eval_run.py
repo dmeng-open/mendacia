@@ -13,7 +13,7 @@ from pathlib import Path
 from app.config import Settings
 from evals import findings, report, runs
 from evals.corpus import load
-from sim.runner import render, run_games
+from sim.runner import HAND_WRITTEN, render, run_games
 
 BACKEND = Path(__file__).resolve().parents[1]
 ROOT = BACKEND.parent
@@ -44,6 +44,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="evals.eval_run")
     parser.add_argument("--n", type=int, default=5)
     parser.add_argument("--concurrency", type=int, default=2)
+    parser.add_argument("--case", action="append", default=None)
     args = parser.parse_args(argv)
     max_usd = Settings().eval_max_usd
     run_id = f"eval-{uuid.uuid4().hex[:10]}"
@@ -60,7 +61,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     subprocess.run(["make", "-C", str(ROOT), "retrieval-eval"], check=True)
     corpus_usd = runs.spent(run_id)
-    sim = run_games(args.n, args.concurrency, max(max_usd - corpus_usd, 0.0))
+    budget = max(max_usd - corpus_usd, 0.0)
+    sim = run_games(args.n, args.concurrency, budget, cases=args.case or HAND_WRITTEN)
     print("\n".join(render(sim)))
 
     runs.finish(run_id, sim.status, sim.run_id)

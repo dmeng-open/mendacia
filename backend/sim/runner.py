@@ -17,6 +17,7 @@ from app import llm
 from app.config import Settings
 from app.db import sync_engine
 from app.llm import LLM_CALLS, Tags
+from app.llm_replay import MissingRecording
 from app.main import create_app
 from engine.schema import Case
 from sim.detective_bot import DetectiveBot, Played
@@ -178,6 +179,8 @@ def run_games(
             return _score(i + 1, case_id, player(c, case_id, budget), None)
         except BudgetExceeded:
             return _score(i + 1, case_id, None, "budget_exceeded")
+        except MissingRecording:
+            return _score(i + 1, case_id, None, "unrecorded")
 
     def run_all(c: TestClient) -> list[GameResult]:
         with metered(budget), ThreadPoolExecutor(max_workers=concurrency) as pool:
