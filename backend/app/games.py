@@ -30,6 +30,7 @@ from agents.game_master import (
 from agents.screening import screen_input
 from agents.state import OnStage, Talk, TurnInput
 from agents.suspect import FALLBACK, Interrogation, StaleState
+from app import llm
 from app.db import sync_engine
 from app.schemas import (
     DocumentBody,
@@ -236,7 +237,8 @@ class GameService:
         on_stage: OnStage | None = None,
     ) -> Outcome:
         async with self._locks.setdefault(session.game_id, asyncio.Lock()):
-            return await self._settle(session, tool, args, key, expected_version, on_stage)
+            with llm.tagged(game_id=session.game_id):
+                return await self._settle(session, tool, args, key, expected_version, on_stage)
 
     async def search(self, session: Session, query: str) -> Outcome:
         args = {"query": query}

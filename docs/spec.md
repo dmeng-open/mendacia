@@ -151,7 +151,7 @@ authorize(subject, action, resource, context) -> Decision
 - an agent that reads the Truth layer has no verifier, or
 - a call site belongs to no registered agent.
 
-The scan reads Truth-layer access as any use of `culprit`, `crime`, or `solution_chain` in an agent's modules. Tools joined the scan in P3-5: it fails when a module names a registered tool its agent does not list, when such a module belongs to no agent, when a manifest lists an unregistered tool, or when the suspect manifest lists any tool.
+The scan reads Truth-layer access as any use of `culprit`, `crime`, or `solution_chain` in an agent's modules. An agent whose manifest grants the player layer only, such as the detective bot, also fails the scan when one of its modules imports `engine` or reads a file (P5-1). Tools joined the scan in P3-5: it fails when a module names a registered tool its agent does not list, when such a module belongs to no agent, when a manifest lists an unregistered tool, or when the suspect manifest lists any tool.
 
 ### 6.4 Input and output guards
 
@@ -243,6 +243,10 @@ Every mutating request on a game carries an `Idempotency-Key` header (each WebSo
 
 Every zero target holds for the named attack corpus, not for the whole world. Thresholds without measured data start as budgets in the plan and get rewritten from baselines.
 
+### 8.1.1 Simulated play (built, P5-1)
+
+`sim.detective_bot.DetectiveBot` plays one game through the same HTTP and WebSocket endpoints the browser uses, with its own session cookie. `MODEL_STRONG` picks each move from what a player can see, with the `detective` prompt. Suspects appear to it by name and clues by number, never by their per-game handles, so its prompts replay. It reads no case file and imports nothing from `engine`, and `make agent-inventory` enforces both. `sim.runner.run_games(n, concurrency, max_usd)` plays `n` games, and its scorer reads the case file to judge each accusation. A run's `Budget` admits a model call only while the run has room for it. It stops every game once the run's spend passes `max_usd`, at most one call past the cap, and reports `budget_exceeded`. `make sim N=<n> CONCURRENCY=<c>` prints one line per game with the result, questions used, verifier blocks, and cost, then the total.
+
 ### 8.2 Attack classes (P5-2)
 
 Each case in the attack corpus is tagged with its class and an OWASP LLM Top 10 (2025) id.
@@ -289,7 +293,7 @@ Each case in the attack corpus is tagged with its class and an OWASP LLM Top 10 
 ### 9.2 Models and calls
 
 - Three model roles only: `MODEL_FAST`, `MODEL_STRONG`, `MODEL_EMBED`. Never hard-code a model name; `tests/test_llm_boundary.py` enforces this.
-- Every model call goes through `app.llm` (ADR 003). Each call writes one `llm_calls` row with model, role, purpose, game id, tokens, `cost_usd`, and `latency_ms`.
+- Every model call goes through `app.llm` (ADR 003). Each call writes one `llm_calls` row with model, role, purpose, game id, run id, tokens, `cost_usd`, and `latency_ms`. The game service runs every turn inside `app.llm.tagged(game_id=...)`, and a simulated run inside `tagged(run_id=...)`, so a call that names neither still carries both (P5-1).
 - `make ci` replays recorded responses. A prompt change re-records its fixtures in the same PR.
 - Prompts live in versioned templates with a `prompt_version` (P3-2). A PR that changes a prompt shows the diff and the `security-regress` result before and after.
 
