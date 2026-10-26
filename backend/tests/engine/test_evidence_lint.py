@@ -65,6 +65,13 @@ def test_chain_document_without_key_flag() -> None:
     )
 
 
+@pytest.mark.parametrize("person", ["clara", "hobbs", "lord_ashcombe"])
+def test_a_person_id_as_document_source_fails(person: str) -> None:
+    assert f"document 'memo_90': source '{person}' is a person id" in problems(
+        archive(memo(90, source=person))
+    )
+
+
 def test_evidence_clue_pointing_at_a_missing_document() -> None:
     base = archive()
     gone = base.model_copy(

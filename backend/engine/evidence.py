@@ -194,7 +194,13 @@ def lint_case(case: Case) -> Lint:
     chain_docs = {
         clues[i].doc_id for i in case.solution_chain if i in clues and clues[i].doc_id is not None
     }
+    people = {p.id for p in case.people}
     for d in case.documents:
+        if d.source in people:
+            problems.append(
+                f"document '{d.id}': source '{d.source}' is a person id, the player sees it; "
+                "name the kind of document instead, such as letter or ledger"
+            )
         if d.is_key and d.id not in chain_docs:
             problems.append(f"document '{d.id}': is_key but no solution_chain clue uses it")
         if not d.is_key and d.id in chain_docs:
