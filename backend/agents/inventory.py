@@ -13,7 +13,7 @@ BACKEND = Path(__file__).resolve().parents[1]
 SCANNED = ("agents", "app", "engine", "evals", "security")
 LLM_ENTRY = frozenset({"complete", "embed", "CompleteModel"})
 TRUTH_ATTRS = frozenset({"culprit", "crime", "solution_chain"})
-TABLES = frozenset({"llm_calls", "verifier_events", "security_events"})
+TABLES = frozenset({"llm_calls", "verifier_events", "security_events", "generation_log"})
 PROVIDERS = frozenset({"litellm", "openai", "anthropic"})
 
 

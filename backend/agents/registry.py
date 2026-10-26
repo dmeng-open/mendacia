@@ -75,8 +75,8 @@ AGENTS = (
         frozenset({"generate"}),
         frozenset({"truth"}),
         "truth",
+        modules=("engine.generator", "engine.draft"),
         verified_by="engine.solver",
-        planned="P4-1",
     ),
     AgentManifest(
         "repair",
@@ -84,8 +84,8 @@ AGENTS = (
         frozenset({"repair"}),
         frozenset({"truth"}),
         "truth",
+        modules=("engine.repair",),
         verified_by="engine.solver",
-        planned="P4-1",
     ),
     AgentManifest(
         "detective_bot",
