@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from app.config import Settings
+from app.llm_replay import LlmMode
 from evals import findings, report, runs
 from evals.corpus import load
 from sim.runner import HAND_WRITTEN, render, run_games
@@ -56,8 +57,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     entries = load()
     found = runs.findings_from(out, {e.id: e.spec["case"] for e in entries})
     runs.record(run_id, found)
-    proposals = findings.write(found, {e.id: e.spec for e in entries}, run_id)
-    print(f"corpus: {len(found)} entries, {len(proposals)} proposals")
+    if Settings().llm_mode is LlmMode.REPLAY:
+        print(f"corpus: {len(found)} entries; replay run, so no regressions or proposals")
+    else:
+        proposals = findings.write(found, {e.id: e.spec for e in entries}, run_id)
+        print(f"corpus: {len(found)} entries, {len(proposals)} proposals")
 
     subprocess.run(["make", "-C", str(ROOT), "retrieval-eval"], check=True)
     corpus_usd = runs.spent(run_id)
