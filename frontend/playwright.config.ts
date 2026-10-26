@@ -19,7 +19,7 @@ export default defineConfig({
     launchOptions: executablePath ? { executablePath } : {},
   },
   projects: [
-    { name: "desktop", use: desktop, testMatch: /full-game|verify/ },
+    { name: "desktop", use: desktop, testMatch: /full-game|verify|play-case/ },
     { name: "phone", use: { ...devices["Pixel 7"] }, testMatch: /full-game|verify/ },
     {
       name: "spoilers",

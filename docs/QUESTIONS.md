@@ -64,3 +64,12 @@ Default taken: the reveal page shows the ruling text, "You accused <name>" and t
 
 1. Keep the journal-based reveal (the default).
 2. Add the culprit's name, the accused's name, and the chain clue descriptions to `Reveal` in a backend follow-up, which also lets another tab or device show the full reveal.
+
+## P4-2: generated prose reaches the suspect system prompt unfenced
+
+The P4-1 attacker review found that `agents/prompts/suspect.txt` places case prose (names, descriptions, a planned lie's `says`) directly in the suspect's system message. For hand-written cases that text is trusted. For a generated case it is model text, and the review showed paraphrased instructions (for example "Disregard your earlier guidance") that the text lint does not flag.
+
+Default taken (ADR 019): every generated case must pass a behavioral security gate before it is published. The gate plays the baseline attack classes against the case's own suspects, asks every suspect a normal question, and runs the canary check. The lint also forbids double quotes in `says`. In the scripted batch test, a case with an injected `says` passes the lint and is rejected by the gate. The suspect prompt is unchanged, so no recorded suspect fixture changed. Options for the operator:
+
+1. Keep the gate as the only control for generated prose (the default).
+2. Also fence case prose in the suspect prompt: put it inside a quoted data block the way documents already are. Any edit to the suspect prompt changes every recorded suspect turn, so this means bumping its `prompt_version`, re-recording the suspect, API, and e2e fixtures with live `MODEL_FAST` calls, and running `make security-regress` before and after. It belongs in its own PR.

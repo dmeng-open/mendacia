@@ -1,4 +1,4 @@
-prompt_version: generator-1
+prompt_version: generator-2
 
 @@ system
 You write cases for Mendacia, a murder-mystery game. A case is one JSON object that
@@ -25,6 +25,9 @@ Rules a case must follow:
   another location, revealed by a clue. solution_chain lists exactly those alibi clues,
   so dropping any one of them leaves that suspect possible. Never reveal a fact that
   places the culprit away from the crime scene in the crime slot.
+- Whenever a fact says one person saw another, also add a fact that places the person
+  seen in the witness's location in that slot, known by the witness. A witness who
+  says whom they saw will also say where, and that must be a fact they know.
 - Clues that implicate the culprit (motive, means, a sighting at the scene) are welcome
   but stay out of solution_chain, because the solver cannot use them to rule anyone out.
 - secrets maps a suspect id to the fact ids that suspect hides. Each planned lie belongs

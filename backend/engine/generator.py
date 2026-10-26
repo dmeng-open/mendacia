@@ -44,6 +44,11 @@ THEMES = (
     "a village bakery the morning of the harvest fair",
     "a museum of clocks after the annual winding ceremony",
     "a seaside boarding school on the night of the spring play",
+    "a desert railway station during a sandstorm",
+    "a botanical glasshouse on the night a rare orchid blooms",
+    "a vineyard estate during the last night of the harvest",
+    "an island radio station during a winter gale",
+    "a travelling circus on its final night in town",
 )
 
 METADATA = sa.MetaData()
@@ -63,6 +68,9 @@ GENERATION_LOG = sa.Table(
     sa.Column("prompt_version", sa.Text),
     sa.Column("case_id", sa.Text),
     sa.Column("case_version", sa.Text),
+    sa.Column("batch_id", sa.Text),
+    sa.Column("gate", sa.Text),
+    sa.Column("gate_detail", sa.Text),
 )
 
 Verdict = Literal["passed", "schema_rejected", "core_rejected", "documents_rejected"]
@@ -237,11 +245,14 @@ def _db() -> sa.Engine:
     return sync_engine(Settings().database_url)
 
 
-def _start(generation_id: str, brief: Brief) -> None:
+def _start(generation_id: str, brief: Brief, batch_id: str | None) -> None:
     with _db().begin() as conn:
         conn.execute(
             sa.insert(GENERATION_LOG).values(
-                id=generation_id, brief=asdict(brief), prompt_version=PROMPT.version
+                id=generation_id,
+                brief=asdict(brief),
+                prompt_version=PROMPT.version,
+                batch_id=batch_id,
             )
         )
 
@@ -305,9 +316,11 @@ def _reason(kind: str, rounds: list[Round]) -> str:
     return f"{kind}: round {last.n} {last.step} {last.verdict}{detail}"
 
 
-def generate_with_repair(brief: Brief, max_rounds: int = 5) -> GenerationResult:
+def generate_with_repair(
+    brief: Brief, max_rounds: int = 5, *, batch_id: str | None = None
+) -> GenerationResult:
     generation_id = uuid4().hex
-    _start(generation_id, brief)
+    _start(generation_id, brief, batch_id)
     budget = Budget(generation_id, BUDGET_USD, BUDGET_S, lambda: spent_usd(generation_id))
     rounds: list[Round] = []
     step: Step = Fresh()
@@ -328,6 +341,17 @@ def generate_with_repair(brief: Brief, max_rounds: int = 5) -> GenerationResult:
         raise
     _finish(generation_id, "discarded", _reason("max_rounds", rounds))
     return Discarded(generation_id, "max_rounds", tuple(rounds))
+
+
+def record_gate(
+    generation_id: str, gate: Literal["passed", "security_rejected"], detail: str | None, case: Case
+) -> None:
+    with _db().begin() as conn:
+        conn.execute(
+            sa.update(GENERATION_LOG)
+            .where(GENERATION_LOG.c.id == generation_id)
+            .values(gate=gate, gate_detail=detail, case_id=case.id, case_version=case_version(case))
+        )
 
 
 def write_case(case: Case, out: Path) -> Path:

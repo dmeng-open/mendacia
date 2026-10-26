@@ -10,8 +10,8 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from agents.suspect import FALLBACK
+from app.catalog import load_cases
 from app.games import GameService
-from app.main import load_cases
 from app.schemas import Handles
 from security.abuse import ABUSE_STRIKES
 from tests.api.conftest import Player, app_of

@@ -242,14 +242,16 @@ const LEAKED = `
 import json, sys
 from engine.schema import Case
 from tests.api.conftest import ROOT, leaked
-case = Case.model_validate_json((ROOT / "cases" / f"{sys.argv[1]}.json").read_text())
+case = Case.model_validate_json((ROOT / sys.argv[1]).read_text())
 print(json.dumps(leaked(case, json.load(open(sys.argv[2])))))
 `;
 
-export function leaked(caseId: string, bodies: readonly string[]): [string, string][] {
+/** `casePath` is a case file relative to the repository root, or a hand-written case id. */
+export function leaked(casePath: string, bodies: readonly string[]): [string, string][] {
+  const path = casePath.endsWith(".json") ? casePath : `cases/${casePath}.json`;
   const file = join(mkdtempSync(join(tmpdir(), "mendacia-leak-")), "bodies.json");
   writeFileSync(file, JSON.stringify(bodies));
-  const out = execFileSync("uv", ["run", "--quiet", "python", "-c", LEAKED, caseId, file], {
+  const out = execFileSync("uv", ["run", "--quiet", "python", "-c", LEAKED, path, file], {
     cwd: BACKEND,
     env: { ...process.env, LLM_MODE: "replay", SESSION_SECRET: "leak-check" },
     encoding: "utf8",

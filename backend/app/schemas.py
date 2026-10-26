@@ -153,6 +153,12 @@ class Reveal(BaseModel):
     timeline: list[str]
 
 
+class CaseSummary(BaseModel):
+    id: str
+    title: str
+    summary: str
+
+
 class Problem(BaseModel):
     code: ReasonCode
     message: str
