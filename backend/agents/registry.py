@@ -93,8 +93,8 @@ AGENTS = (
         frozenset({"detective"}),
         frozenset({"player"}),
         "player",
+        modules=("sim.detective_bot",),
         tools=tuple(t for t, spec in TOOLS.items() if "detective_bot" in spec.actors),
-        planned="P5-1",
     ),
     AgentManifest(
         "attack_runner",

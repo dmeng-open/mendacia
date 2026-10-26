@@ -2,7 +2,7 @@ ENV_FILE := $(if $(wildcard .env),.env,.env.example)
 ENV_NAMES := $(shell sed -n 's/^\([A-Z_]*\)=.*/\1/p' $(ENV_FILE))
 $(foreach v,$(ENV_NAMES),$(if $(filter environment,$(origin $(v))),,$(eval export $(v) := $(shell sed -n 's/^$(v)=//p' $(ENV_FILE)))))
 
-.PHONY: setup up db-create migrate api test lint typecheck ci doctor validate-cases check-case case cases generation-report lint-evidence record-fixtures play-cli scan-instructions audit agent-inventory security-regress seed retrieval-eval record-retrieval node-check web play api-types frontend-lint frontend-typecheck frontend-test e2e e2e-backend
+.PHONY: setup up db-create migrate api test lint typecheck ci doctor validate-cases check-case case cases generation-report lint-evidence record-fixtures play-cli sim scan-instructions audit agent-inventory security-regress seed retrieval-eval record-retrieval node-check web play api-types frontend-lint frontend-typecheck frontend-test e2e e2e-backend
 
 NODE_VERSION := $(shell cat frontend/.nvmrc)
 NODE_DIR ?= /opt/node-v$(NODE_VERSION)
@@ -37,7 +37,7 @@ lint:
 	cd backend && uv run ruff check . && uv run ruff format --check .
 
 typecheck:
-	cd backend && uv run mypy agents app engine evals evidence migrations security tests
+	cd backend && uv run mypy agents app engine evals evidence migrations security sim tests
 
 ci: lint typecheck scan-instructions agent-inventory lint-evidence test security-regress frontend-lint frontend-typecheck frontend-test e2e
 
@@ -72,6 +72,11 @@ case:
 
 cases:
 	cd backend && uv run python -m engine.cli generate --n $(N)
+
+CONCURRENCY ?= 2
+
+sim:
+	cd backend && uv run python -m sim.runner --n $(N) --concurrency $(CONCURRENCY)
 
 generation-report:
 	cd backend && uv run python -m evals.generation_report

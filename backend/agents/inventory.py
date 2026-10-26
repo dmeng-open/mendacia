@@ -10,11 +10,13 @@ from agents.registry import AGENTS, LLM_ADAPTERS, AgentManifest
 from security.tool_broker import TOOLS
 
 BACKEND = Path(__file__).resolve().parents[1]
-SCANNED = ("agents", "app", "engine", "evals", "security")
+SCANNED = ("agents", "app", "engine", "evals", "security", "sim")
 LLM_ENTRY = frozenset({"complete", "embed", "CompleteModel"})
 TRUTH_ATTRS = frozenset({"culprit", "crime", "solution_chain"})
 TABLES = frozenset({"llm_calls", "verifier_events", "security_events", "generation_log"})
 PROVIDERS = frozenset({"litellm", "openai", "anthropic"})
+ORACLES = frozenset({"engine"})
+FILE_READS = frozenset({"open", "read_text", "read_bytes"})
 
 
 @dataclass(frozen=True)
@@ -33,6 +35,8 @@ class ModuleUse:
     tables: frozenset[str]
     bypasses: tuple[int, ...] = ()
     tools: frozenset[str] = frozenset()
+    imports: frozenset[str] = frozenset()
+    reads_files: bool = False
 
 
 def sources(root: Path = BACKEND) -> list[tuple[str, str]]:
@@ -83,7 +87,13 @@ def scan_module(module: str, source: str) -> ModuleUse:
     truth = False
     tables: set[str] = set()
     tools: set[str] = set()
+    imports: set[str] = set()
+    reads_files = False
     for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            imports.add(node.module.split(".")[0])
+        if isinstance(node, ast.Import):
+            imports |= {a.name.split(".")[0] for a in node.names}
         if isinstance(node, ast.Constant) and node.value in TOOLS:
             tools.add(str(node.value))
         if isinstance(node, ast.Attribute) and node.attr in TRUTH_ATTRS:
@@ -94,6 +104,7 @@ def scan_module(module: str, source: str) -> ModuleUse:
             bypasses.append(node.lineno)
         if not isinstance(node, ast.Call):
             continue
+        reads_files |= _name(node.func) in FILE_READS
         args = list(node.args)
         if _name(node.func) == "getattr" and len(args) > 1:
             attr = args[1]
@@ -114,7 +125,14 @@ def scan_module(module: str, source: str) -> ModuleUse:
         text = text if isinstance(text, str) else None
         calls.append(CallSite(module, node.lineno, _role(role_arg, constants), text))
     return ModuleUse(
-        module, tuple(calls), truth, frozenset(tables), tuple(bypasses), frozenset(tools)
+        module,
+        tuple(calls),
+        truth,
+        frozenset(tables),
+        tuple(bypasses),
+        frozenset(tools),
+        frozenset(imports),
+        reads_files,
     )
 
 
@@ -167,6 +185,13 @@ def problems(uses: Iterable[ModuleUse], agents: Sequence[AgentManifest] = AGENTS
             out.append(f"{use.module}: {agent.name} reads the truth layer outside its manifest")
         if use.reads_truth and agent.verified_by is None:
             out.append(f"{use.module}: {agent.name} reads the truth layer with no verifier")
+        if agent.layers <= {"player"}:
+            out += [
+                f"{use.module}: {agent.name} imports {m!r}, a player-layer agent has no oracle"
+                for m in sorted(use.imports & ORACLES)
+            ]
+            if use.reads_files:
+                out.append(f"{use.module}: {agent.name} reads files, a player-layer agent has none")
     return out
 
 

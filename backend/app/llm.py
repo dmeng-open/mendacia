@@ -1,8 +1,10 @@
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import Any, Protocol
 
 import sqlalchemy as sa
 from pydantic import BaseModel
@@ -40,6 +42,34 @@ class ModelRole(StrEnum):
 
 class MissingApiKey(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class Tags:
+    run_id: str | None = None
+    game_id: str | None = None
+
+
+TAGS: ContextVar[Tags | None] = ContextVar("llm_tags", default=None)
+
+
+@contextmanager
+def tagged(*, run_id: str | None = None, game_id: str | None = None) -> Iterator[None]:
+    now = TAGS.get() or Tags()
+    token = TAGS.set(Tags(run_id or now.run_id, game_id or now.game_id))
+    try:
+        yield
+    finally:
+        TAGS.reset(token)
+
+
+class Meter(Protocol):
+    def before(self, tags: Tags) -> None: ...
+
+    def after(self, tags: Tags, cost_usd: float) -> None: ...
+
+
+METERS: list[Meter] = []
 
 
 @dataclass(frozen=True)
@@ -97,6 +127,43 @@ def _run(
     prompt_version: str | None = None,
     run_id: str | None = None,
 ) -> Recording:
+    context = TAGS.get() or Tags()
+    tags = Tags(run_id or context.run_id, game_id or context.game_id)
+    for meter in METERS:
+        meter.before(tags)
+    cost = 0.0
+    try:
+        recording, mode = _record(settings, role, request, live_call, to_output)
+        cost = recording.cost_usd
+    finally:
+        for meter in METERS:
+            meter.after(tags, cost)
+    with sync_engine(settings.database_url).begin() as conn:
+        conn.execute(
+            sa.insert(LLM_CALLS).values(
+                model=recording.model,
+                role=role.value,
+                purpose=purpose,
+                game_id=tags.game_id,
+                prompt_tokens=recording.prompt_tokens,
+                completion_tokens=recording.completion_tokens,
+                cost_usd=recording.cost_usd,
+                latency_ms=recording.latency_ms,
+                mode=mode.value,
+                prompt_version=prompt_version,
+                run_id=tags.run_id,
+            )
+        )
+    return recording
+
+
+def _record(
+    settings: Settings,
+    role: ModelRole,
+    request: Mapping[str, Any],
+    live_call: Callable[[str, dict[str, Any]], tuple[Any, float]],
+    to_output: Callable[[Any], str | list[list[float]]],
+) -> tuple[Recording, LlmMode]:
     key = llm_replay.request_key(role, request)
     mode = settings.llm_mode
     if mode is LlmMode.RECORD and llm_replay.exists(key):
@@ -121,23 +188,7 @@ def _run(
         )
         if mode is LlmMode.RECORD:
             llm_replay.save(recording)
-    with sync_engine(settings.database_url).begin() as conn:
-        conn.execute(
-            sa.insert(LLM_CALLS).values(
-                model=recording.model,
-                role=role.value,
-                purpose=purpose,
-                game_id=game_id,
-                prompt_tokens=recording.prompt_tokens,
-                completion_tokens=recording.completion_tokens,
-                cost_usd=recording.cost_usd,
-                latency_ms=recording.latency_ms,
-                mode=mode.value,
-                prompt_version=prompt_version,
-                run_id=run_id,
-            )
-        )
-    return recording
+    return recording, mode
 
 
 def complete(
