@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = "==3.12.*"
 
 [[package]]
@@ -1078,7 +1078,7 @@ requires-dist = [
     { name = "pydantic-ai-slim", specifier = "==2.59.0" },
     { name = "pydantic-settings", specifier = ">=2.6" },
     { name = "pyyaml", specifier = ">=6.0.3" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.1.5" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.1.6" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.54.0" },
 ]
 
